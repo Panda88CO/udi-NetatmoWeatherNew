@@ -150,7 +150,7 @@ class NetatmoCloud(OAuth):
         if "TEMP_UNIT" in self.customParameters:
             self.temp_unit = self.customParameters['TEMP_UNIT'][0].upper()
         else:
-            self.temp_unit = 0
+            self.temp_unit = 'C'
             self.customParameters['TEMP_UNIT'] = 'C'
 
         #if 'refresh_token' in self.customParameters:

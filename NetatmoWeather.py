@@ -143,9 +143,7 @@ class NetatmoWeather (NetatmoCloud):
     def merge_data_str(self, data):
         '''merge_data_str'''
         #logging.debug('merge_data_str: {}'.format(data))
-        if data == 'ts':
-            data_str = 'time_stamp'
-        if data == 'time_utc':
+        if data in ('ts', 'time_utc'):
             data_str = 'time_stamp'               
         elif data == 'AbsolutePressure':
             data_str = 'absolute_pressure'
@@ -379,11 +377,12 @@ class NetatmoWeather (NetatmoCloud):
 
     def get_time_stamp(self, module):
         try:
-            logging.debug('get_time_stamp {} {} {} {}'.format(self.weather_data[module['home_id']][module['type']][module['module_id']]['time_stamp'],module['home_id'], module['type'], module['module_id'] ))
-            return(self.weather_data[module['home_id']][module['type']][module['module_id']]['time_stamp'])       
+            val = self.weather_data.get(module['home_id'], {}).get(module['type'], {}).get(module['module_id'], {}).get('time_stamp')
+            logging.debug('get_time_stamp {} {} {} {}'.format(val, module['home_id'], module['type'], module['module_id']))
+            return val
         except Exception as e:
             logging.error('get_time_stamp exception: {}'.format(e))
-            return(None)        
+            return None        
              
     def get_time_since_time_stamp_min(self, module):
         meas_time = self.get_time_stamp(module)
@@ -401,13 +400,16 @@ class NetatmoWeather (NetatmoCloud):
             logging.error('get_temp_trend exception; {}'.format(e))
             return( None)
     
-    def get_hum_trend(self, module):
+    def get_pressure_trend(self, module):
         try:
-            trend = self.weather_data[module['home_id']][module['type']][module['module_id']]['pressure_trend']
-   
+            trend = self.weather_data[module['home_id']][module['type']][module['module_id']].get('pressure_trend')
+            return trend
         except Exception as e:
-            logging.error('get_hum_trend exception; {}'.format(e))
-            return( None, None)
+            logging.error('get_pressure_trend exception; {}'.format(e))
+            return None
+
+    def get_hum_trend(self, module):
+        return self.get_pressure_trend(module)
         
 
     def get_rain(self, module):

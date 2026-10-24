@@ -21,16 +21,15 @@ except ImportError:
     logging.basicConfig(level=logging.DEBUG)
 
 '''
-id = 'rain'
+id = 'RAIN'
 drivers = [
-            {'driver' : 'GV0', 'value': 0,  'uom':82}, 
-            {'driver' : 'GV1', 'value': 0,  'uom':82}, 
-            {'driver' : 'GV2', 'value': 0,  'uom':82}, 
-            {'driver' : 'GV3', 'value': 0,  'uom':12}, 
-            {'driver' : 'GV4', 'value': 0,  'uom':44}, 
-            {'driver' : 'GV5', 'value': 0,  'uom':51}, 
-          
-            {'driver' : 'ST', 'value': 0,  'uom':2}, 
+            {'driver' : 'ST', 'value': 0,  'uom':82, 'name': 'Rain'}, 
+            {'driver' : 'GV1', 'value': 0,  'uom':82, 'name': 'Sum Rain 1h'}, 
+            {'driver' : 'GV2', 'value': 0,  'uom':82, 'name': 'Sum Rain 24h'}, 
+            {'driver' : 'GV4', 'value': 0,  'uom':25, 'name': 'Battery'}, 
+            {'driver' : 'GV5', 'value': 0,  'uom':25, 'name': 'RF Status'}, 
+            {'driver' : 'GV9', 'value': 0,  'uom':2, 'name': 'Connected'}, 
+            {'driver' : 'TIME', 'value': 0,  'uom':151, 'name': 'Time of last data'}, 
             ]
 '''
 
@@ -44,16 +43,15 @@ class udiN_WeatherRain(udi_interface.Node):
         self.primary = primary
         self.address = address
         self.name = name
-        self.id = 'rain'
+        self.id = 'RAIN'
         self.drivers = [
-            {'driver' : 'GV0', 'value': 0,  'uom':82}, 
-            {'driver' : 'GV1', 'value': 0,  'uom':82}, 
-            {'driver' : 'GV2', 'value': 0,  'uom':82}, 
-            {'driver' : 'GV3', 'value': 0,  'uom':44}, 
-            {'driver' : 'GV4', 'value': 99,  'uom':25}, 
-            {'driver' : 'GV5', 'value': 99,  'uom':25}, 
-          
-            {'driver' : 'ST', 'value': 0,  'uom':2}, 
+            {'driver' : 'ST', 'value': 0,  'uom':82, 'name': 'Rain'}, 
+            {'driver' : 'GV1', 'value': 0,  'uom':82, 'name': 'Sum Rain 1h'}, 
+            {'driver' : 'GV2', 'value': 0,  'uom':82, 'name': 'Sum Rain 24h'}, 
+            {'driver' : 'GV4', 'value': 99,  'uom':25, 'name': 'Battery'}, 
+            {'driver' : 'GV5', 'value': 99,  'uom':25, 'name': 'RF Status'}, 
+            {'driver' : 'GV9', 'value': 0,  'uom':2, 'name': 'Connected'}, 
+            {'driver' : 'TIME', 'value': 0,  'uom':151, 'name': 'Time of last data'}, 
             ]
         
         self.n_queue = []
@@ -93,13 +91,6 @@ class udiN_WeatherRain(udi_interface.Node):
         return tmp[:14]
     
     
-
-    def convert_temp_unit(self, tempStr):
-        if tempStr.capitalize()[:1] == 'F':
-            return(1)
-        elif tempStr.capitalize()[:1] == 'K':
-            return(0)
-        
 
     def start(self):
         logging.debug('Executing NetatmoWeatherRain start')
@@ -144,20 +135,6 @@ class udiN_WeatherRain(udi_interface.Node):
         else:
             state = 99
         return(state)
-    
-
-    def trend2ISY (self, trend):
-        if trend is None:
-            return 99
-        if trend == 'stable':
-            return(0)
-        elif trend == 'up':
-            return(1)
-        elif trend =='down':
-            return(2)
-        else:
-            logging.error('unsupported temperature trend: {}'.format(trend))
-            return(99)    
         
     def updateISYdrivers(self):
         logging.debug('updateISYdrivers')
@@ -165,11 +142,11 @@ class udiN_WeatherRain(udi_interface.Node):
         logging.debug('Rain module data: {}'.format(data))
         if self.node is not None:
             if self.weather.get_online(self.module):
-                self.node.setDriver('ST', 1)
+                self.node.setDriver('GV9', 1)
               
                 rain = self.weather.get_rain(self.module)
                 if rain is not None:
-                    self.node.setDriver('GV0', rain, True, False, 82)
+                    self.node.setDriver('ST', rain, True, False, 82)
                 rain_1h = self.weather.get_rain_1hour(self.module)
                 if rain_1h is not None:
                     self.node.setDriver('GV1', rain_1h, True, False, 82)
@@ -177,23 +154,27 @@ class udiN_WeatherRain(udi_interface.Node):
                 if rain_24h is not None:
                     self.node.setDriver('GV2', rain_24h, True, False, 82)
 
-                time_since = self.weather.get_time_since_time_stamp_min(self.module)
-                if time_since is not None:
-                    self.node.setDriver('GV3', time_since, True, False, 44)
+                time_stamp = self.weather.get_time_stamp(self.module)
+                if time_stamp is not None:
+                    try:
+                        ts_val = int(time_stamp)
+                        if ts_val > 0:
+                            self.node.setDriver('TIME', ts_val, True, False, 151)
+                    except (ValueError, TypeError):
+                        pass
                 
                 bat_state, bat_lvl  = self.weather.get_battery_info(self.module)    
                 self.node.setDriver('GV4', self.battery2ISY(bat_state), True, False, 25 )     
                 rf1, rf2 = self.weather.get_rf_info(self.module) 
-                self.node.setDriver('GV5', self.rfstate2ISY(rf1) )
+                self.node.setDriver('GV5', self.rfstate2ISY(rf1), True, False, 25 )
                 #self.node.setDriver('ERR', 0)
             else:
-                self.node.setDriver('GV0', 99, True, False, 25 )
+                self.node.setDriver('ST', 99, True, False, 25 )
                 self.node.setDriver('GV1', 99, True, False, 25 )
                 self.node.setDriver('GV2', 99, True, False, 25 )
-                self.node.setDriver('GV3', 99, True, False, 25 )
                 self.node.setDriver('GV4', 99, True, False, 25 )
                 self.node.setDriver('GV5', 99, True, False, 25 )
-                self.node.setDriver('ST', 0)
+                self.node.setDriver('GV9', 0)
                 #self.node.setDriver('ERR', 1)
 
 

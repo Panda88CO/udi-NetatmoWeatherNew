@@ -45,22 +45,22 @@ from udiNetatmoWeatherWind import udiN_WeatherWind
     </sts>
 '''
 '''
-id = 'mainunit'
+id = 'MAINUNIT'
 
 drivers = [
-            {'driver' : 'CLITEMP', 'value': 0,  'uom':4}, 
-            {'driver' : 'CO2LVL', 'value': 0,  'uom':54}, 
-            {'driver' : 'CLIHUM', 'value': 0,  'uom':22}, 
-            {'driver' : 'GV3', 'value': 0,  'uom':12}, 
-            {'driver' : 'BARPRES', 'value': 0,  'uom':23}, 
-            {'driver' : 'GV5', 'value': 0,  'uom':23}, 
-            {'driver' : 'GV6', 'value': 0,  'uom':4}, 
-            {'driver' : 'GV7', 'value': 0,  'uom':4}, 
-            {'driver' : 'GV8', 'value': 0,  'uom':25}, 
-            {'driver' : 'GV9', 'value': 0,  'uom':25}, 
-            {'driver' : 'GV10', 'value': 0,  'uom':44},
-            {'driver' : 'GV11', 'value': 0,  'uom':131},            
-            {'driver' : 'ST', 'value': 0,  'uom':2}, 
+            {'driver' : 'ST', 'value': 0,  'uom':2, 'name': 'Connected'}, 
+            {'driver' : 'CLITEMP', 'value': 0,  'uom':4, 'name': 'Temperature'}, 
+            {'driver' : 'CO2LVL', 'value': 0,  'uom':54, 'name': 'CO2'}, 
+            {'driver' : 'CLIHUM', 'value': 0,  'uom':51, 'name': 'Humidity'}, 
+            {'driver' : 'GV3', 'value': 0,  'uom':12, 'name': 'Noise'}, 
+            {'driver' : 'BARPRES', 'value': 0,  'uom':117, 'name': 'Pressure'}, 
+            {'driver' : 'GV5', 'value': 0,  'uom':117, 'name': 'Absolute Pressure'}, 
+            {'driver' : 'GV6', 'value': 0,  'uom':4, 'name': 'Min Temperature'}, 
+            {'driver' : 'GV7', 'value': 0,  'uom':4, 'name': 'Max Temperature'}, 
+            {'driver' : 'GV8', 'value': 0,  'uom':25, 'name': 'Temperature Trend'}, 
+            {'driver' : 'GV9', 'value': 0,  'uom':25, 'name': 'Pressure Trend'}, 
+            {'driver' : 'GV11', 'value': 0,  'uom':25, 'name': 'Wi-Fi Status'},            
+            {'driver' : 'TIME', 'value': 0,  'uom':151, 'name': 'Time of last data'}, 
             ]
 '''
 
@@ -77,21 +77,21 @@ class udiNetatmoWeatherMain(udi_interface.Node):
         self.poly.subscribe(self.poly.ADDNODEDONE, self.node_queue)
         self.module = {'module_id':module_info['main_module'], 'type':'MAIN', 'home_id':module_info['home'] }
         logging.debug('self.module = {}'.format(self.module))
-        self.id = 'mainunit'
+        self.id = 'MAINUNIT'
         self.drivers = [
-            {'driver' : 'CLITEMP', 'value': 99,  'uom':25}, 
-            {'driver' : 'CO2LVL', 'value': 99,  'uom':25}, 
-            {'driver' : 'CLIHUM', 'value': 0,  'uom':51}, 
-            {'driver' : 'GV3', 'value': 0,  'uom':12}, 
-            {'driver' : 'BARPRES', 'value': 0,  'uom':117}, 
-            {'driver' : 'GV5', 'value': 0,  'uom':117}, 
-            {'driver' : 'GV6', 'value': 0,  'uom':4}, 
-            {'driver' : 'GV7', 'value': 0,  'uom':4}, 
-            {'driver' : 'GV8', 'value': 99,  'uom':25}, 
-            #{'driver' : 'GV9', 'value': 0,  'uom':25}, 
-            {'driver' : 'GV10', 'value': 0,  'uom':44},
-            {'driver' : 'GV11', 'value': 99,  'uom':25},         
-            {'driver' : 'ST', 'value': 0,  'uom':2}, 
+            {'driver' : 'ST', 'value': 0,  'uom':2, 'name': 'Connected'}, 
+            {'driver' : 'CLITEMP', 'value': 99,  'uom':25, 'name': 'Temperature'}, 
+            {'driver' : 'CO2LVL', 'value': 99,  'uom':25, 'name': 'CO2'}, 
+            {'driver' : 'CLIHUM', 'value': 0,  'uom':51, 'name': 'Humidity'}, 
+            {'driver' : 'GV3', 'value': 0,  'uom':12, 'name': 'Noise'}, 
+            {'driver' : 'BARPRES', 'value': 0,  'uom':117, 'name': 'Pressure'}, 
+            {'driver' : 'GV5', 'value': 0,  'uom':117, 'name': 'Absolute Pressure'}, 
+            {'driver' : 'GV6', 'value': 0,  'uom':4, 'name': 'Min Temperature'}, 
+            {'driver' : 'GV7', 'value': 0,  'uom':4, 'name': 'Max Temperature'}, 
+            {'driver' : 'GV8', 'value': 99,  'uom':25, 'name': 'Temperature Trend'}, 
+            {'driver' : 'GV9', 'value': 99,  'uom':25, 'name': 'Pressure Trend'}, 
+            {'driver' : 'GV11', 'value': 99,  'uom':25, 'name': 'Wi-Fi Status'},         
+            {'driver' : 'TIME', 'value': 0,  'uom':151, 'name': 'Time of last data'},
             ]
         self.primary = primary
         self.address = address
@@ -282,11 +282,16 @@ class udiNetatmoWeatherMain(udi_interface.Node):
                 temp_trend = self.weather.get_temp_trend(self.module)
                 self.node.setDriver('GV8', self.trend2ISY(temp_trend))
 
-                #hum_trend= self.weather.get_hum_trend(self.module)
-                #self.node.setDriver('GV9', trend_val)
-                time_since = self.weather.get_time_since_time_stamp_min(self.module)
-                if time_since is not None:
-                    self.node.setDriver('GV10', time_since, True, False, 44)
+                pres_trend = self.weather.get_pressure_trend(self.module)
+                self.node.setDriver('GV9', self.trend2ISY(pres_trend))
+                time_stamp = self.weather.get_time_stamp(self.module)
+                if time_stamp is not None:
+                    try:
+                        ts_val = int(time_stamp)
+                        if ts_val > 0:
+                            self.node.setDriver('TIME', ts_val, True, False, 151)
+                    except (ValueError, TypeError):
+                        pass
                 rf1, rf2 = self.weather.get_rf_info(self.module) 
                 self.node.setDriver('GV11', self.rfstate2ISY(rf1) )
                 #self.node.setDriver('ERR', 0)    
@@ -300,8 +305,7 @@ class udiNetatmoWeatherMain(udi_interface.Node):
                 self.node.setDriver('BARPRES', 99, True, False, 25 )
                 self.node.setDriver('GV5', 99, True, False, 25 )
                 self.node.setDriver('GV8', 99, True, False, 25 )
-                #self.node.setDriver('GV9', 99, True, False, 25 )
-                self.node.setDriver('GV10', 99, True, False, 25 )
+                self.node.setDriver('GV9', 99, True, False, 25 )
                 self.node.setDriver('GV11', 99, True, False, 25 )
                 self.node.setDriver('ST', 0) 
                 #self.node.setDriver('ERR', 1)                     

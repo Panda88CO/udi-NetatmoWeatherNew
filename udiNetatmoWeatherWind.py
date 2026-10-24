@@ -22,18 +22,18 @@ except ImportError:
 
 
 '''
-id = 'wind'
+id = 'WIND'
 drivers = [ 
-            {'driver' : 'GV0', 'value': 0,  'uom':48},
-            {'driver' : 'GV1', 'value': 0,  'uom':76},
-            {'driver' : 'GV2', 'value': 0,  'uom':48},
-            {'driver' : 'GV3', 'value': 0,  'uom':76},
-            {'driver' : 'GV4', 'value': 0,  'uom':48},
-            {'driver' : 'GV5', 'value': 0,  'uom':76},
-            {'driver' : 'GV6', 'value': 0,  'uom':44},
-            {'driver' : 'GV7', 'value': 0,  'uom':25},
-            {'driver' : 'GV8', 'value': 0,  'uom':25},                
-            {'driver' : 'ST', 'value': 0,  'uom':2},   
+            {'driver' : 'ST', 'value': 0,  'uom':48, 'name': 'Wind'},
+            {'driver' : 'GV1', 'value': 0,  'uom':76, 'name': 'Wind Angle'},
+            {'driver' : 'GV2', 'value': 0,  'uom':48, 'name': 'Gust Strength'},
+            {'driver' : 'GV3', 'value': 0,  'uom':76, 'name': 'Gust Angle'},
+            {'driver' : 'GV4', 'value': 0,  'uom':48, 'name': 'Max Wind Strength'},
+            {'driver' : 'GV5', 'value': 0,  'uom':76, 'name': 'Max Wind Angle'},
+            {'driver' : 'GV7', 'value': 0,  'uom':25, 'name': 'Battery'},
+            {'driver' : 'GV8', 'value': 0,  'uom':25, 'name': 'RF Status'},                
+            {'driver' : 'GV9', 'value': 0,  'uom':2, 'name': 'Connected'},   
+            {'driver' : 'TIME', 'value': 0,  'uom':151, 'name': 'Time of last data'},
             ]
 '''
 
@@ -48,18 +48,18 @@ class udiN_WeatherWind(udi_interface.Node):
         self.primary = primary
         self.address = address
         self.name = name        
-        self.id = 'wind'
+        self.id = 'WIND'
         self.drivers = [ 
-            {'driver' : 'GV0', 'value': 0,  'uom':48},
-            {'driver' : 'GV1', 'value': 0,  'uom':76},
-            {'driver' : 'GV2', 'value': 0,  'uom':48},
-            {'driver' : 'GV3', 'value': 0,  'uom':76},
-            {'driver' : 'GV4', 'value': 0,  'uom':48},
-            {'driver' : 'GV5', 'value': 0,  'uom':76},
-            {'driver' : 'GV6', 'value': 0,  'uom':44},
-            {'driver' : 'GV7', 'value': 99,  'uom':25},
-            {'driver' : 'GV8', 'value': 99,  'uom':25},
-            {'driver' : 'ST', 'value': 0,  'uom':2},
+            {'driver' : 'ST', 'value': 0,  'uom':48, 'name': 'Wind'},
+            {'driver' : 'GV1', 'value': 0,  'uom':76, 'name': 'Wind Angle'},
+            {'driver' : 'GV2', 'value': 0,  'uom':48, 'name': 'Gust Strength'},
+            {'driver' : 'GV3', 'value': 0,  'uom':76, 'name': 'Gust Angle'},
+            {'driver' : 'GV4', 'value': 0,  'uom':48, 'name': 'Max Wind Strength'},
+            {'driver' : 'GV5', 'value': 0,  'uom':76, 'name': 'Max Wind Angle'},
+            {'driver' : 'GV7', 'value': 99,  'uom':25, 'name': 'Battery'},
+            {'driver' : 'GV8', 'value': 99,  'uom':25, 'name': 'RF Status'},
+            {'driver' : 'GV9', 'value': 0,  'uom':2, 'name': 'Connected'},
+            {'driver' : 'TIME', 'value': 0,  'uom':151, 'name': 'Time of last data'},
             ]
   
         self.n_queue = []
@@ -160,11 +160,11 @@ class udiN_WeatherWind(udi_interface.Node):
         logging.debug('Wind module data: {}'.format(data))
         if self.node is not None:
             if self.weather.get_online(self.module):
-                self.node.setDriver('ST', 1)
+                self.node.setDriver('GV9', 1)
               
                 wind_str = self.weather.get_wind_strength(self.module)
                 if wind_str is not None:
-                    self.node.setDriver('GV0', wind_str, True, False, 48)
+                    self.node.setDriver('ST', wind_str, True, False, 48)
                 wind_ang = self.weather.get_wind_angle(self.module)
                 if wind_ang is not None:
                     self.node.setDriver('GV1', wind_ang, True, False, 76)
@@ -181,26 +181,30 @@ class udiN_WeatherWind(udi_interface.Node):
                 if max_ang is not None:
                     self.node.setDriver('GV5', max_ang, True, False, 76)
 
-                time_since = self.weather.get_time_since_time_stamp_min(self.module)
-                if time_since is not None:
-                    self.node.setDriver('GV6', time_since, True, False, 44)
+                time_stamp = self.weather.get_time_stamp(self.module)
+                if time_stamp is not None:
+                    try:
+                        ts_val = int(time_stamp)
+                        if ts_val > 0:
+                            self.node.setDriver('TIME', ts_val, True, False, 151)
+                    except (ValueError, TypeError):
+                        pass
                 
                 bat_state, bat_lvl  = self.weather.get_battery_info(self.module)    
                 self.node.setDriver('GV7', self.battery2ISY(bat_state), True, False, 25 )     
                 rf1, rf2 = self.weather.get_rf_info(self.module) 
-                self.node.setDriver('GV8', self.rfstate2ISY(rf1) )
+                self.node.setDriver('GV8', self.rfstate2ISY(rf1), True, False, 25 )
                 #self.node.setDriver('ERR', 0)
             else:
-                self.node.setDriver('GV0', 99, True, False, 25 )
+                self.node.setDriver('ST', 99, True, False, 25 )
                 self.node.setDriver('GV1', 99, True, False, 25 )
                 self.node.setDriver('GV2', 99, True, False, 25 )
                 self.node.setDriver('GV3', 99, True, False, 25 )
                 self.node.setDriver('GV4', 99, True, False, 25 )
                 self.node.setDriver('GV5', 99, True, False, 25 )
-                self.node.setDriver('GV6', 99, True, False, 25 )
                 self.node.setDriver('GV7', 99, True, False, 25 )
                 self.node.setDriver('GV8', 99, True, False, 25 )                 
-                self.node.setDriver('ST', 0)
+                self.node.setDriver('GV9', 0)
                 #self.node.setDriver('ERR', 1)
        
     commands = {        

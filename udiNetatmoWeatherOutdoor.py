@@ -23,19 +23,18 @@ except ImportError:
 #from nodes.controller import Controller
 #from udi_interface import logging, Custom, Interface
 '''
-id = 'outdoor'
+id = 'OUTDOOR'
 
 drivers = [
-            {'driver' : 'CLITEMP', 'value': 0,  'uom':4}, 
-            {'driver' : 'CO2LVL', 'value': 0,  'uom':54}, 
-            {'driver' : 'CLIHUM', 'value': 0,  'uom':22}, 
-            {'driver' : 'GV3', 'value': 0,  'uom':4}, 
-            {'driver' : 'GV4', 'value': 0,  'uom':4}, 
-            {'driver' : 'GV5', 'value': 0,  'uom':25}, 
-            {'driver' : 'GV6', 'value': 0,  'uom':44}, 
-            {'driver' : 'GV7', 'value': 0,  'uom':51}, 
-            {'driver' : 'GV8', 'value': 0,  'uom':25},          
-            {'driver' : 'ST', 'value': 0,  'uom':2}, 
+            {'driver' : 'ST', 'value': 0,  'uom':4, 'name': 'Temperature'}, 
+            {'driver' : 'CLIHUM', 'value': 0,  'uom':51, 'name': 'Humidity'}, 
+            {'driver' : 'GV2', 'value': 0,  'uom':4, 'name': 'Min Temperature'}, 
+            {'driver' : 'GV3', 'value': 0,  'uom':4, 'name': 'Max Temperature'}, 
+            {'driver' : 'GV4', 'value': 0,  'uom':25, 'name': 'Temperature Trend'}, 
+            {'driver' : 'GV6', 'value': 0,  'uom':51, 'name': 'Battery'}, 
+            {'driver' : 'GV7', 'value': 0,  'uom':25, 'name': 'RF Status'},          
+            {'driver' : 'GV9', 'value': 0,  'uom':2, 'name': 'Connected'}, 
+            {'driver' : 'TIME', 'value': 0,  'uom':151, 'name': 'Time of last data'}, 
             ]
 '''
             
@@ -50,18 +49,17 @@ class udiN_WeatherOutdoor(udi_interface.Node):
         self.primary = primary
         self.address = address
         self.name = name
-        self.id = 'outdoor'
+        self.id = 'OUTDOOR'
         self.drivers = [
-            {'driver' : 'CLITEMP', 'value': 0,  'uom':4}, 
-            {'driver' : 'CO2LVL', 'value': 0,  'uom':54}, 
-            {'driver' : 'CLIHUM', 'value': 0,  'uom':22}, 
-            {'driver' : 'GV2', 'value': 0,  'uom':4}, 
-            {'driver' : 'GV3', 'value': 0,  'uom':4}, 
-            {'driver' : 'GV4', 'value': 99,  'uom':25}, 
-            {'driver' : 'GV5', 'value': 0,  'uom':44}, 
-            {'driver' : 'GV6', 'value': 99,  'uom':25}, 
-            {'driver' : 'GV7', 'value': 99,  'uom':25},       
-            {'driver' : 'ST', 'value': 0,  'uom':2}, 
+            {'driver' : 'ST', 'value': 0,  'uom':4, 'name': 'Temperature'}, 
+            {'driver' : 'CLIHUM', 'value': 0,  'uom':51, 'name': 'Humidity'}, 
+            {'driver' : 'GV2', 'value': 0,  'uom':4, 'name': 'Min Temperature'}, 
+            {'driver' : 'GV3', 'value': 0,  'uom':4, 'name': 'Max Temperature'}, 
+            {'driver' : 'GV4', 'value': 99,  'uom':25, 'name': 'Temperature Trend'}, 
+            {'driver' : 'GV6', 'value': 99,  'uom':25, 'name': 'Battery'}, 
+            {'driver' : 'GV7', 'value': 99,  'uom':25, 'name': 'RF Status'},       
+            {'driver' : 'GV9', 'value': 0,  'uom':2, 'name': 'Connected'}, 
+            {'driver' : 'TIME', 'value': 0,  'uom':151, 'name': 'Time of last data'}, 
             ]
         
         self.n_queue = []
@@ -170,32 +168,38 @@ class udiN_WeatherOutdoor(udi_interface.Node):
         logging.debug('Outdoor module data: {}'.format(data))
         if self.node is not None:
             if self.weather.get_online(self.module):
-                self.node.setDriver('ST', 1)
+                self.node.setDriver('GV9', 1)
                 temp = self.weather.get_temperature_C(self.module)
                 min_temp = self.weather.get_min_temperature_C(self.module)
                 max_temp = self.weather.get_max_temperature_C(self.module)
                 if self.convert_temp_unit(self.weather.temp_unit) == 0:
                     if temp is not None:
-                        self.node.setDriver('CLITEMP', round(temp, 1), True, False, 4)
+                        self.node.setDriver('ST', round(temp, 1), True, False, 4)
                     if min_temp is not None:
                         self.node.setDriver('GV2', round(min_temp, 1), True, False, 4)
                     if max_temp is not None:
                         self.node.setDriver('GV3', round(max_temp, 1), True, False, 4)
                 else:
                     if temp is not None:
-                        self.node.setDriver('CLITEMP', round(temp * 9 / 5 + 32, 1), True, False, 17)
+                        self.node.setDriver('ST', round(temp * 9 / 5 + 32, 1), True, False, 17)
                     if min_temp is not None:
                         self.node.setDriver('GV2', round(min_temp * 9 / 5 + 32, 1), True, False, 17)
                     if max_temp is not None:
                         self.node.setDriver('GV3', round(max_temp * 9 / 5 + 32, 1), True, False, 17)
+                hum = self.weather.get_humidity(self.module)
+                if hum is not None:
+                    self.node.setDriver('CLIHUM', hum, True, False, 51)
                 temp_trend = self.weather.get_temp_trend(self.module)
                 self.node.setDriver('GV4', self.trend2ISY(temp_trend))
 
-                #hum_trend= self.weather.get_hum_trend(self.module)
-                #self.node.setDriver('GV9', trend_val)
-                time_since = self.weather.get_time_since_time_stamp_min(self.module)
-                if time_since is not None:
-                    self.node.setDriver('GV5', time_since, True, False, 44)
+                time_stamp = self.weather.get_time_stamp(self.module)
+                if time_stamp is not None:
+                    try:
+                        ts_val = int(time_stamp)
+                        if ts_val > 0:
+                            self.node.setDriver('TIME', ts_val, True, False, 151)
+                    except (ValueError, TypeError):
+                        pass
 
                 bat_state, bat_lvl  = self.weather.get_battery_info(self.module)    
                 self.node.setDriver('GV6', self.battery2ISY(bat_state), True, False, 25 )           
@@ -203,15 +207,15 @@ class udiN_WeatherOutdoor(udi_interface.Node):
                 self.node.setDriver('GV7', self.rfstate2ISY(rf1), True, False, 25  )
                 #self.node.setDriver('ERR', 0)    
             else:
-                self.node.setDriver('CLITEMP', 99, True, False, 25 )
+                self.node.setDriver('ST', 99, True, False, 25 )
+                self.node.setDriver('CLIHUM', 99, True, False, 25 )
                 self.node.setDriver('GV2', 99, True, False, 25 )
                 self.node.setDriver('GV3', 99, True, False, 25 )
 
                 self.node.setDriver('GV4', 99, True, False, 25 )
-                self.node.setDriver('GV5', 99, True, False, 25 )
                 self.node.setDriver('GV6', 99, True, False, 25 )
                 self.node.setDriver('GV7', 99, True, False, 25 )
-                self.node.setDriver('ST', 0)
+                self.node.setDriver('GV9', 0)
                 #self.node.setDriver('ERR', 1)                 
 
 

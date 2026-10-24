@@ -306,9 +306,12 @@ class NetatmoController(udi_interface.Node):
                                             
             except Exception as e:
                     logging.error('Exeption occcured : {}'.format(e))
-    id = 'controller'
-    drivers =  [ {'driver': 'ST', 'value':0, 'uom':2}, ]
-    commands = { 'UPDATE': update, }
+    id = 'CONTROLLER'
+    drivers =  [ {'driver': 'ST', 'value':0, 'uom':2, 'name': 'NodeServer Online'}, ]
+    commands = { 
+        'UPDATE': update, 
+        'QUERY': update,
+    }
 
 if __name__ == "__main__":
     try:
