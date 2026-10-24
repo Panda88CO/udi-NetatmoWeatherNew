@@ -323,6 +323,8 @@ class NetatmoCloud(OAuth):
 
     def process_homes_data(self, net_system):
         homes_list = {}
+        if not net_system or not isinstance(net_system, dict) or 'homes' not in net_system:
+            return homes_list
         for home in range(0, len(net_system['homes'])):
             tmp = net_system['homes'][home]
             homes_list[tmp['id']]= {}
@@ -341,7 +343,10 @@ class NetatmoCloud(OAuth):
         logging.debug('get_home_info')
         api_str = '/homesdata'
         temp = self._callApi('GET', api_str )
-        self.netatmo_systems = temp['body']
+        if temp and isinstance(temp, dict) and 'body' in temp:
+            self.netatmo_systems = temp['body']
+        else:
+            self.netatmo_systems = {}
         logging.debug(self.netatmo_systems)
         self.homes_list = self.process_homes_data(self.netatmo_systems)
         return(self.homes_list)
@@ -351,31 +356,35 @@ class NetatmoCloud(OAuth):
         status = {}
         logging.debug('get_home_status')
         try:
-            if home_id:
-                home_id_str = urllib.parse.quote_plus(home_id )
-                api_str = '/homestatus?home_id='+str(home_id_str)
-
+            if not home_id:
+                return status
+            home_id_str = urllib.parse.quote_plus(home_id)
+            api_str = '/homestatus?home_id=' + str(home_id_str)
 
             tmp = self._callApi('GET', api_str)
-            if tmp:
-                tmp = tmp['body']
-                if 'errors' not in tmp:
-                    tmp = tmp['home']
-                    status[home_id] = home_id #tmp['body']['body']['home']
-                    if 'modules' in tmp:
-                        status['modules'] = {}
-                        status['module_types'] = []
-                        for mod in range(0,len(tmp['modules'])):
-                            status['modules'][tmp['modules'][mod]['id']]= tmp['modules'][mod]
-                            status['module_types'].append(tmp['modules'][mod]['type'])
-                    logging.debug(status)
-                else:
-                    status['error'] = tmp['error']
-
-                return(status)
+            if tmp and isinstance(tmp, dict):
+                body = tmp.get('body', tmp)
+                if isinstance(body, dict):
+                    if 'home' in body:
+                        home_data = body['home']
+                        status[home_id] = home_id
+                        if 'modules' in home_data and isinstance(home_data['modules'], list):
+                            status['modules'] = {}
+                            status['module_types'] = []
+                            for mod in home_data['modules']:
+                                if isinstance(mod, dict) and 'id' in mod:
+                                    status['modules'][mod['id']] = mod
+                                    if 'type' in mod:
+                                        status['module_types'].append(mod['type'])
+                    if 'errors' in body:
+                        status['errors'] = body['errors']
+                    elif 'error' in body:
+                        status['error'] = body['error']
+                logging.debug('get_home_status result: {}'.format(status))
+            return status
         except Exception as e:
             logging.error('Error get home status : {}'.format(e))
-            return(None)
+            return {}
 
     def get_modules(self, home_id):
         '''get_modules'''
@@ -398,9 +407,9 @@ class NetatmoCloud(OAuth):
         '''get_modules_present'''
         logging.debug('get_modules_present')
         modules = {}
-        if home_id in self.homes_list:
-            for tmp in range(0,len(self.homes_list[home_id]['modules'])):
-                modules[tmp[id]] = tmp
+        if home_id in self.homes_list and 'modules' in self.homes_list[home_id]:
+            for mod_id, mod in self.homes_list[home_id]['modules'].items():
+                modules[mod_id] = mod
         return(modules)
     
     def get_sub_modules(self, home_id, main_module_id):

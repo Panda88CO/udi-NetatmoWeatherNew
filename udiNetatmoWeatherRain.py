@@ -112,6 +112,8 @@ class udiN_WeatherRain(udi_interface.Node):
 
 
     def rfstate2ISY(self, rf_state):
+        if rf_state is None:
+            return 99
         if rf_state.lower() == 'full' or rf_state.lower() == 'high':
             rf = 0
         elif rf_state.lower() == 'medium':
@@ -125,6 +127,8 @@ class udiN_WeatherRain(udi_interface.Node):
     
 
     def battery2ISY(self, batlvl):
+        if batlvl is None:
+            return 99
         if batlvl == 'max':
             state = 0
         elif batlvl == 'full':
@@ -143,6 +147,8 @@ class udiN_WeatherRain(udi_interface.Node):
     
 
     def trend2ISY (self, trend):
+        if trend is None:
+            return 99
         if trend == 'stable':
             return(0)
         elif trend == 'up':
@@ -161,11 +167,19 @@ class udiN_WeatherRain(udi_interface.Node):
             if self.weather.get_online(self.module):
                 self.node.setDriver('ST', 1)
               
-                self.node.setDriver('GV0', self.weather.get_rain(self.module), True, False, 82)
-                self.node.setDriver('GV1', self.weather.get_rain_1hour(self.module), True, False, 82)
-                self.node.setDriver('GV2', self.weather.get_rain_24hours(self.module), True, False, 82)
+                rain = self.weather.get_rain(self.module)
+                if rain is not None:
+                    self.node.setDriver('GV0', rain, True, False, 82)
+                rain_1h = self.weather.get_rain_1hour(self.module)
+                if rain_1h is not None:
+                    self.node.setDriver('GV1', rain_1h, True, False, 82)
+                rain_24h = self.weather.get_rain_24hours(self.module)
+                if rain_24h is not None:
+                    self.node.setDriver('GV2', rain_24h, True, False, 82)
 
-                self.node.setDriver('GV3', self.weather.get_time_since_time_stamp_min(self.module) , True, False, 44)
+                time_since = self.weather.get_time_since_time_stamp_min(self.module)
+                if time_since is not None:
+                    self.node.setDriver('GV3', time_since, True, False, 44)
                 
                 bat_state, bat_lvl  = self.weather.get_battery_info(self.module)    
                 self.node.setDriver('GV4', self.battery2ISY(bat_state), True, False, 25 )     

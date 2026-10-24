@@ -120,6 +120,8 @@ class udiN_WeatherWind(udi_interface.Node):
         self.updateISYdrivers()
 
     def rfstate2ISY(self, rf_state):
+        if rf_state is None:
+            return 99
         if rf_state.lower() == 'full' or rf_state.lower() == 'high':
             rf = 0
         elif rf_state.lower() == 'medium':
@@ -133,6 +135,8 @@ class udiN_WeatherWind(udi_interface.Node):
     
 
     def battery2ISY(self, batlvl):
+        if batlvl is None:
+            return 99
         if batlvl == 'max':
             state = 0
         elif batlvl == 'full':
@@ -158,13 +162,28 @@ class udiN_WeatherWind(udi_interface.Node):
             if self.weather.get_online(self.module):
                 self.node.setDriver('ST', 1)
               
-                self.node.setDriver('GV0', self.weather.get_wind_strength(self.module), True, False, 48)
-                self.node.setDriver('GV1', self.weather.get_wind_angle(self.module), True, False, 76)
-                self.node.setDriver('GV2', self.weather.get_gust_strength(self.module), True, False, 48)
-                self.node.setDriver('GV3', self.weather.get_gust_angle(self.module), True, False, 76)
-                self.node.setDriver('GV4', self.weather.get_max_wind_strength(self.module), True, False, 48)
-                self.node.setDriver('GV5', self.weather.get_max_wind_angle(self.module), True, False, 76)
-                self.node.setDriver('GV6', self.weather.get_time_since_time_stamp_min(self.module) , True, False, 44)
+                wind_str = self.weather.get_wind_strength(self.module)
+                if wind_str is not None:
+                    self.node.setDriver('GV0', wind_str, True, False, 48)
+                wind_ang = self.weather.get_wind_angle(self.module)
+                if wind_ang is not None:
+                    self.node.setDriver('GV1', wind_ang, True, False, 76)
+                gust_str = self.weather.get_gust_strength(self.module)
+                if gust_str is not None:
+                    self.node.setDriver('GV2', gust_str, True, False, 48)
+                gust_ang = self.weather.get_gust_angle(self.module)
+                if gust_ang is not None:
+                    self.node.setDriver('GV3', gust_ang, True, False, 76)
+                max_str = self.weather.get_max_wind_strength(self.module)
+                if max_str is not None:
+                    self.node.setDriver('GV4', max_str, True, False, 48)
+                max_ang = self.weather.get_max_wind_angle(self.module)
+                if max_ang is not None:
+                    self.node.setDriver('GV5', max_ang, True, False, 76)
+
+                time_since = self.weather.get_time_since_time_stamp_min(self.module)
+                if time_since is not None:
+                    self.node.setDriver('GV6', time_since, True, False, 44)
                 
                 bat_state, bat_lvl  = self.weather.get_battery_info(self.module)    
                 self.node.setDriver('GV7', self.battery2ISY(bat_state), True, False, 25 )     
