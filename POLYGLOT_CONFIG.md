@@ -1,12 +1,13 @@
-## Netatmo  NodeServer Configuration
-####Configuration Parameters:
+## Netatmo NodeServer Configuration
 
-- key: shortPoll, value: Time between refresh of critical data in sec. 
-- key: longPoll, value: Time between refresh of all data in sec.
+#### Configuration Parameters:
 
-####Custom Configuration Parameters:
+- **shortPoll**: Time between refresh of instantaneous data in seconds (default: 300).
+- **longPoll**: Time between refresh of all cloud data in seconds (default: 1800).
 
-- key: ClientID, value: cliendID from Netatmo developer User App 
-- key: ClientSecret, value: cliendSecret from Netatmo developer User App 
-- key: TEMP_UNIT, value: Temperature reporting unit (F or C)
-- key: XXXX, value : Select (1) or disable (0) XXXX weather station
+#### Custom Configuration Parameters:
+
+- **ClientID**: Client ID from your Netatmo Developer App.
+- **ClientSecret**: Client Secret from your Netatmo Developer App.
+- **TEMP_UNIT**: Temperature reporting unit (`C` or `F`, default: `C`).
+- **<StationName>**: Enable (`1`) or disable (`0`) specific weather stations associated with your account.

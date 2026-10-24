@@ -1,56 +1,70 @@
-
 # Netatmo Weather Station NodeServer
 
 Netatmo Weather Station NodeServer for PG3, PG3x
 MIT license.
 
-This node server integrated the Netatmo Weather Station. You will need account access to your Netatmo via the Netatmo Developer API https://dev.netatmo.com.  Log in and select My Apps and then Create  Fill in info and press save - This exposes a client ID and client secret. 
-Start the node server under PG3 - go to configuration and enter client ID and client Secret.  Then restart.   First time you do this you should see a text box asking to authendicate.  Press the authendicate button - you should be taken to a new webpage where you login using you Netatmo id and password (used to generate the clientID etc).  Then press accept and you will be returned to the PG3 interface. 
-After running a little the differnt main netatmo under the account should be listed in configuration.  By default all are active.  If you do not want one station included set the value to 0
-Restart and you should be up and running
+This node server integrates the Netatmo Weather Station. You will need account access to your Netatmo via the Netatmo Developer API https://dev.netatmo.com. Log in, select **My Apps**, and then **Create**. Fill in the application information and save — this exposes a **Client ID** and **Client Secret**.
 
-Good luck
+Start the node server under PG3x — go to **Configuration** and enter your Client ID and Client Secret, then restart. The first time you do this, you should see a notice asking to authenticate. Click the **Authenticate** button — you will be taken to Netatmo's login page where you enter your Netatmo credentials. Press **Accept** to authorize and you will be returned to the PG3 interface.
+
+After running, the detected weather stations under the account will be listed in Configuration. By default, all stations are active (`1`). If you do not want a station included, set its value to `0` and restart.
 
 ## Installation
 
-1. Backup Your ISY in case of problems!
-2. Go to the Polyglot Store in the UI and install.
-3. Add NodeServer in PG3x - NOTE PG3 is not supported as OAuth library does not work on PG3 
-   Got ton configuration and enter clientId and client secret (see above)
-   Restart
-   Authendicate if asked
-   Select weather stations to be used in configuration (1 for enable, 0 for disable)
-   Restart node server
-   Go to Admin console 
+1. Backup your ISY/IoX in case of problems!
+2. Install the node server from the Polyglot Store in the PG3x UI.
+3. Open the node server Configuration and enter your `ClientID` and `ClientSecret`.
+4. Restart the node server.
+5. Authenticate via the OAuth prompt when requested.
+6. Select weather stations to be included in configuration (`1` to enable, `0` to disable).
+7. Restart the node server.
+8. Open the Admin Console.
 
 ### Node Settings
-The settings for this node are:
 
 #### Short Poll
-   * Query Weather Station instantaneous data. The default is 5 minutes - sends a heart beat as well 0->1 or 1 -> 0
+* Query Weather Station instantaneous data. The default is 5 minutes (sends a heartbeat pulse `DON` / `DOF`).
+
 #### Long Poll
-   * Query Weather Station all data. Netatmo data is updated every 15 min or so.  The default is 30 minutes.
+* Query Weather Station full cloud data. Netatmo weather data updates every ~10–15 minutes. The default is 30 minutes.
 
 #### ClientID
-   * Your Netatmo App Client ID
+* Your Netatmo App Client ID.
 
 #### ClientSecret
-   * Your Netatmo App Client Secret
+* Your Netatmo App Client Secret.
 
 #### TEMP_UNIT
-   * C (default) of F
+* Temperature unit: `C` (default) or `F`.
 
-#### Diffetn Weather stations
-   * Weather stations associated with teh account are listed - 1 to include 0 to disable 
+#### Weather Stations
+* Weather stations associated with the account are listed by station name — set to `1` to include or `0` to disable.
 
 ## Requirements
 
-   * PG3x ver 3.2.18 or greater
-   * UDI_interfae 3.1.1 or greater
-
+* PG3x ver 3.2.18 or greater
+* udi_interface 3.1.1 or greater
 
 # Release Notes
-code somewhat based on original NEtatmoWeather node server (depreciated due to new authendication methods)
 
-- 0.1.0 02/07/2024
-   - Initial version published to github - 
+*Code based on the original NetatmoWeather node server (updated for modern OAuth authentication and PG3x).*
+
+- **1.0.2** (10/24/2026)
+  - Updated primary status (`ST`) on submodule nodes: Temperature for Indoor/Outdoor, Wind for Wind gauge, and Rain for Rain gauge.
+  - Moved connection state to `GV9` (Connected) on all submodule nodes; Main node retains `ST` as Connected.
+  - Reordered drivers and node definitions so `ST` is first and `TIME` is last.
+  - Replaced "Time since measurement" with Epoch timestamp `TIME` (UOM 151) across all nodes.
+  - `TIME` preserves the last valid timestamp and is not cleared on temporary communication loss or offline status.
+  - Enabled Pressure Trend (`GV9`) on Main Station.
+  - Fixed Outdoor module humidity (`CLIHUM`) reporting in online and offline states.
+  - Fixed timestamp merge key overwrite bug (`ts` / `time_utc`).
+  - Added `QUERY` command to all nodes and `DON`/`DOF` heartbeat commands to Controller.
+
+- **1.0.1** (10/24/2026)
+  - Standardized all nodeDef, editor, and driver IDs to uppercase with no special characters.
+  - Added descriptive names to all drivers across all nodes.
+  - Fixed startup crash when offline or empty stations exist in the account.
+  - Robust exception and response handling for Netatmo API calls.
+
+- **0.1.0** (02/07/2024)
+  - Initial version published to GitHub.
