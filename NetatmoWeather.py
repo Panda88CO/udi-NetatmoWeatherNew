@@ -47,7 +47,13 @@ class NetatmoWeather (NetatmoCloud):
             logging.debug('tmp = {}'.format(tmp))
             if not tmp:
                 return {}
-            self.cloud_data[home_id] = {}
+            self.cloud_data[home_id] = {
+                'MAIN': {},
+                'INDOOR': {},
+                'OUTDOOR': {},
+                'RAIN': {},
+                'WIND': {}
+            }
             for dev_id in tmp:
                 if tmp[dev_id]['type'] in self.MAIN_modules:
                     dev_id_str = urllib.parse.quote_plus(dev_id)
@@ -58,18 +64,11 @@ class NetatmoWeather (NetatmoCloud):
                         devices = temp_data.get('body', {}).get('devices', [])
                         if not devices:
                             continue
-                        if len(devices) > 1:
-                            logging.error('Code only handles 1st main weather station : {} found'.format(len(devices)))
-                            logging.error('Processing first one')
-                        device_data = devices[0]
+                        device_data = next(
+                            (d for d in devices if (d.get('_id') or d.get('id')) == dev_id),
+                            devices[0]
+                        )
                         logging.debug('past temp data {}'.format(device_data))
-                        self.cloud_data[home_id] = {
-                            'MAIN': {},
-                            'INDOOR': {},
-                            'OUTDOOR': {},
-                            'RAIN': {},
-                            'WIND': {}
-                        }
                         main_entry = {}
                         if 'dashboard_data' in device_data:
                             main_entry.update(device_data['dashboard_data'])
@@ -355,11 +354,23 @@ class NetatmoWeather (NetatmoCloud):
         for home_id in tmp:
             found = False
             for mod_type in tmp[home_id]['module_types']:
-                if mod_type in  self._dev_list:
+                if mod_type in self._dev_list:
                     found = True
             if found:
                 self.weather_in_homes[home_id] = tmp[home_id]
-        return(self.weather_in_homes)
+        if not self.weather_in_homes:
+            logging.warning('No weather stations found in /homesdata; checking /getstationsdata')
+            stations_resp = self._callApi('GET', '/getstationsdata?get_favorites=false')
+            if stations_resp and 'body' in stations_resp:
+                self.homes_list = self.process_stations_data(stations_resp['body'])
+                for home_id in self.homes_list:
+                    found = any(
+                        mod_type in self._dev_list
+                        for mod_type in self.homes_list[home_id]['module_types']
+                    )
+                    if found:
+                        self.weather_in_homes[home_id] = self.homes_list[home_id]
+        return self.weather_in_homes
 
     def get_main_modules(self, home_id):
         '''get_main_modules '''

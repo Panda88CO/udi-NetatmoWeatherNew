@@ -239,6 +239,13 @@ class NetatmoController(udi_interface.Node):
             self.poly.Notices.delete('auth')
 
         self.home_ids = self.myNetatmo.get_homes()
+        if not self.home_ids:
+            for attempt in range(1, 4):
+                logging.warning(f'No homes returned from Netatmo (attempt {attempt}/3); retrying in 5s...')
+                time.sleep(5)
+                self.home_ids = self.myNetatmo.get_homes()
+                if self.home_ids:
+                    break
         if self.home_ids:
             self.node.setDriver('ST', 1, True, True)
 
@@ -256,7 +263,8 @@ class NetatmoController(udi_interface.Node):
             self.webhook_registered = self.myNetatmo.add_webhook()
 
         self.addNodes()
-        self.wait_for_node_done()
+        if self.n_queue:
+            self.wait_for_node_done()
 
         if not self.message_thread.is_alive():
             self.message_thread.start()
@@ -295,14 +303,17 @@ class NetatmoController(udi_interface.Node):
         while not self.configDone:
             logging.info('Waiting for config to comlete')
             time.sleep(1)
-        logging.debug('Checking for nodes not used - node list {} - {} {}'.format(primary_node_list, len(self.nodes_in_db), self.nodes_in_db))
-        for nde in range(0, len(self.nodes_in_db)):
-            node = self.nodes_in_db[nde]
+        if self.home_ids:
+            logging.debug('Checking for nodes not used - node list {} - {} {}'.format(primary_node_list, len(self.nodes_in_db), self.nodes_in_db))
+            for nde in range(0, len(self.nodes_in_db)):
+                node = self.nodes_in_db[nde]
 
-            logging.debug('Scanning db for extra nodes : {}'.format(node))
-            if node['primaryNode'] not in primary_node_list:
-                logging.debug('Removing node : {} {}'.format(node['name'], node))
-                self.poly.delNode(node['address'])
+                logging.debug('Scanning db for extra nodes : {}'.format(node))
+                if node['primaryNode'] not in primary_node_list:
+                    logging.debug('Removing node : {} {}'.format(node['name'], node))
+                    self.poly.delNode(node['address'])
+        else:
+            logging.warning('No homes discovered from Netatmo API; skipping node cleanup to preserve existing nodes')
 
         self.nodeDefineDone = True
 
@@ -323,6 +334,12 @@ class NetatmoController(udi_interface.Node):
                 if 'longPoll' in polltype:
                     # Keep token current and refresh cloud daily min/max/trend values
                     self.myNetatmo.authendicated()
+                    if not self.homes_list:
+                        self.home_ids = self.myNetatmo.get_homes()
+                        if self.home_ids:
+                            self.node.setDriver('ST', 1, True, True)
+                            self.addNodes()
+                            nodes = self.poly.nodes()
                     if not self.webhook_registered and self.webhookSuccess == 'Success':
                         self.webhook_registered = self.myNetatmo.add_webhook()
                         if self.webhook_registered:

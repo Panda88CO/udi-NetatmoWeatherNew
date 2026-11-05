@@ -284,33 +284,63 @@ class NetatmoCloud(OAuth):
             logging.error(f"body is required when using { method } { completeUrl }")
         logging.debug(' call info url={}, header= {}, body = {}'.format(completeUrl, headers, body))
 
-        try:
-            if method == 'GET':
-                response = requests.get(completeUrl, headers=headers, timeout=15)
-            elif method == 'DELETE':
-                response = requests.delete(completeUrl, headers=headers, timeout=15)
-            elif method == 'PATCH':
-                response = requests.patch(completeUrl, headers=headers, json=body, timeout=15)
-            elif method == 'POST':
-                if body is not None:
-                    response = requests.post(completeUrl, headers=headers, json=body, timeout=15)
-                else:
-                    response = requests.post(completeUrl, headers=headers, timeout=15)
-            elif method == 'PUT':
-                response = requests.put(completeUrl, headers=headers, timeout=15)
-
-            response.raise_for_status()
+        max_attempts = 3
+        retry_statuses = {429, 500, 502, 503, 504}
+        for attempt in range(1, max_attempts + 1):
             try:
-                return response.json()
-            except requests.exceptions.JSONDecodeError:
-                return response.text
+                if method == 'GET':
+                    response = requests.get(completeUrl, headers=headers, timeout=15)
+                elif method == 'DELETE':
+                    response = requests.delete(completeUrl, headers=headers, timeout=15)
+                elif method == 'PATCH':
+                    response = requests.patch(completeUrl, headers=headers, json=body, timeout=15)
+                elif method == 'POST':
+                    if body is not None:
+                        response = requests.post(completeUrl, headers=headers, json=body, timeout=15)
+                    else:
+                        response = requests.post(completeUrl, headers=headers, timeout=15)
+                elif method == 'PUT':
+                    response = requests.put(completeUrl, headers=headers, timeout=15)
 
-        except requests.exceptions.HTTPError as error:
-            logging.error(f"Call { method } { completeUrl } failed: { error }")
-            return None
-        except requests.exceptions.RequestException as error:
-            logging.error(f"Request { method } { completeUrl } failed: { error }")
-            return None
+                if response.status_code in retry_statuses and attempt < max_attempts:
+                    delay = 1.5 * attempt
+                    logging.warning(
+                        f"Call {method} {completeUrl} returned HTTP {response.status_code} "
+                        f"(attempt {attempt}/{max_attempts}); retrying in {delay}s..."
+                    )
+                    time.sleep(delay)
+                    continue
+
+                response.raise_for_status()
+                try:
+                    return response.json()
+                except requests.exceptions.JSONDecodeError:
+                    return response.text
+
+            except requests.exceptions.HTTPError as error:
+                status_code = error.response.status_code if error.response is not None else None
+                if status_code in retry_statuses and attempt < max_attempts:
+                    delay = 1.5 * attempt
+                    logging.warning(
+                        f"Call {method} {completeUrl} failed with HTTP {status_code} "
+                        f"(attempt {attempt}/{max_attempts}); retrying in {delay}s..."
+                    )
+                    time.sleep(delay)
+                    continue
+                logging.error(f"Call { method } { completeUrl } failed: { error }")
+                return None
+            except requests.exceptions.RequestException as error:
+                if attempt < max_attempts:
+                    delay = 1.5 * attempt
+                    logging.warning(
+                        f"Request {method} {completeUrl} failed ({error}) "
+                        f"(attempt {attempt}/{max_attempts}); retrying in {delay}s..."
+                    )
+                    time.sleep(delay)
+                    continue
+                logging.error(f"Request { method } { completeUrl } failed: { error }")
+                return None
+        return None
 
     def get_portal_webhook_url(self):
         try:
@@ -363,11 +393,10 @@ class NetatmoCloud(OAuth):
             logging.error('No webhook URL available to register with Netatmo')
             return False
         encoded_url = urllib.parse.quote_plus(webhook_url)
-        api_str = f'/addwebhook?url={encoded_url}'
+        api_str = f'/addwebhook?url={encoded_url}&app_type=app_station'
         res = self._callApi('POST', api_str)
         if res is None:
-            # Fallback with app_station parameter for older Netatmo station endpoints
-            api_str_fallback = f'/addwebhook?url={encoded_url}&app_type=app_station'
+            api_str_fallback = f'/addwebhook?url={encoded_url}'
             res = self._callApi('POST', api_str_fallback)
         if isinstance(res, dict) and res.get('status') == 'ok':
             logging.info(f'Successfully registered Netatmo webhook: {webhook_url}')
@@ -377,10 +406,9 @@ class NetatmoCloud(OAuth):
 
     def drop_webhook(self):
         logging.debug('drop_webhook called')
-        api_str = '/dropwebhook'
-        res = self._callApi('POST', api_str)
+        res = self._callApi('POST', '/dropwebhook?app_type=app_station')
         if res is None:
-            res = self._callApi('POST', '/dropwebhook?app_type=app_station')
+            res = self._callApi('POST', '/dropwebhook')
         if isinstance(res, dict) and res.get('status') == 'ok':
             logging.info('Successfully dropped Netatmo webhook')
             return True
@@ -446,16 +474,73 @@ class NetatmoCloud(OAuth):
                     homes_list[tmp['id']]['module_types'].append(tmp['modules'][mod]['type'])
         return homes_list
 
+    def process_stations_data(self, stations_body):
+        homes_list = {}
+        if not stations_body or 'devices' not in stations_body:
+            return homes_list
+        for dev in stations_body.get('devices', []):
+            dev_id = dev.get('_id') or dev.get('id')
+            if not dev_id:
+                continue
+            home_id = dev.get('home_id') or dev_id
+            main_name = dev.get('module_name') or dev.get('name') or dev_id
+            home_name = dev.get('home_name')
+            if not home_name:
+                station_name = dev.get('station_name', home_id)
+                suffix = f' ({main_name})'
+                if isinstance(station_name, str) and station_name.endswith(suffix):
+                    home_name = station_name[:-len(suffix)]
+                else:
+                    home_name = station_name
+            if home_id not in homes_list:
+                homes_list[home_id] = {
+                    'name': home_name,
+                    'modules': {},
+                    'module_types': [],
+                }
+            bridged_ids = []
+            for sub in dev.get('modules', []):
+                sub_id = sub.get('_id') or sub.get('id')
+                if not sub_id:
+                    continue
+                sub_type = sub.get('type')
+                sub_name = sub.get('module_name') or sub.get('name') or sub_id
+                bridged_ids.append(sub_id)
+                homes_list[home_id]['modules'][sub_id] = {
+                    'id': sub_id,
+                    'type': sub_type,
+                    'name': sub_name,
+                    'bridge': dev_id,
+                }
+                if sub_type:
+                    homes_list[home_id]['module_types'].append(sub_type)
+            main_type = dev.get('type', 'NAMain')
+            homes_list[home_id]['modules'][dev_id] = {
+                'id': dev_id,
+                'type': main_type,
+                'name': main_name,
+                'modules_bridged': bridged_ids,
+            }
+            homes_list[home_id]['module_types'].append(main_type)
+        return homes_list
+
     def get_homes_info(self):
         logging.debug('get_home_info')
         api_str = '/homesdata'
         temp = self._callApi('GET', api_str)
-        if not temp or 'body' not in temp:
-            self.homes_list = {}
+        if temp and 'body' in temp:
+            self.netatmo_systems = temp['body']
+            logging.debug(self.netatmo_systems)
+            self.homes_list = self.process_homes_data(self.netatmo_systems)
+            if self.homes_list:
+                return self.homes_list
+        logging.warning('Falling back to /getstationsdata to discover weather stations')
+        stations_resp = self._callApi('GET', '/getstationsdata?get_favorites=false')
+        if stations_resp and 'body' in stations_resp:
+            self.netatmo_systems = stations_resp['body']
+            self.homes_list = self.process_stations_data(self.netatmo_systems)
             return self.homes_list
-        self.netatmo_systems = temp['body']
-        logging.debug(self.netatmo_systems)
-        self.homes_list = self.process_homes_data(self.netatmo_systems)
+        self.homes_list = {}
         return self.homes_list
 
     def get_home_status(self, home_id):

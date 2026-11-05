@@ -105,9 +105,7 @@ class udiNetatmoWeatherMain(udi_interface.Node):
         self.Notices = Custom(self.poly, 'notices')
         self.poly.subscribe(self.poly.START, self.start, address)
         #self.poly.subscribe(self.poly.STOP, self.stop)
-        self.poly.subscribe(self.poly.ADDNODEDONE, self.node_queue)
 
-        polyglot.ready()
         self.poly.addNode(self)
         self.wait_for_node_done()
         
