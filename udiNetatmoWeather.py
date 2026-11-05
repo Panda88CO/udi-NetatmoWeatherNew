@@ -85,17 +85,23 @@ class NetatmoController(udi_interface.Node):
         logging.debug(f'webhook_test called {param}')
         body = {'event': 'webhook-test', 'data': {'type': 'test', 'description': 'webhook test'}}
         try:
+            if self.webhookTimer is not None:
+                self.webhookTimer.cancel()
+                self.webhookTimer = None
             self.webhookSuccess = 'Unknown'
             self.node.setDriver('GV30', 1, True, True)
             self.myNetatmo.testWebhook(body)
-            self.webhookTimer = threading.Timer(self.webhookTestTimeoutSeconds, self.webhookTimeout)
-            self.webhookTimer.start()
+            if self.webhookSuccess == 'Unknown':
+                self.webhookTimer = threading.Timer(self.webhookTestTimeoutSeconds, self.webhookTimeout)
+                self.webhookTimer.start()
         except Exception as e:
             logging.error(f'Error in webhook_test: {e}')
             self.node.setDriver('GV30', 4, True, True)
             self.webhookSuccess = 'Failure'
 
     def webhookTimeout(self):
+        if self.webhookSuccess == 'Success':
+            return
         logging.error('Webhook test timed out - Please verify your setup for receiving webhook events.')
         self.node.setDriver('GV30', 3, True, True)
         self.webhookSuccess = 'Timeout'
@@ -106,6 +112,8 @@ class NetatmoController(udi_interface.Node):
             self.webhookTimer.cancel()
         self.node.setDriver('GV30', 2, True, True)
         self.webhookSuccess = 'Success'
+        if self.webhook_registered:
+            self.node.setDriver('GV29', 1, True, True)
         if 'webhook' in self.poly.Notices:
             self.poly.Notices.delete('webhook')
 
@@ -257,11 +265,16 @@ class NetatmoController(udi_interface.Node):
             logging.info('Waiting for configuration to complete')
             time.sleep(1)
 
-        if self.webhookSuccess == 'Success':
-            self.webhook_registered = self.myNetatmo.add_webhook()
-            self.node.setDriver('GV29', 1 if self.webhook_registered else 0, True, True)
-        else:
-            self.webhook_registered = self.myNetatmo.add_webhook()
+        if self.webhookSuccess != 'Success' and self.home_ids:
+            logging.info('Retrying webhook test after network/API connection established')
+            self.webhook_test()
+            test_time = 0
+            while self.webhookSuccess == 'Unknown' and test_time < self.webhookTestTimeoutSeconds:
+                time.sleep(1)
+                test_time += 1
+
+        self.webhook_registered = self.myNetatmo.add_webhook()
+        self.node.setDriver('GV29', 1 if (self.webhook_registered and self.webhookSuccess == 'Success') else 0, True, True)
 
         self.addNodes()
         if self.n_queue:
@@ -354,10 +367,11 @@ class NetatmoController(udi_interface.Node):
                             self.node.setDriver('ST', 1, True, True)
                             self.addNodes()
                             nodes = self.poly.nodes()
-                    if not self.webhook_registered and self.webhookSuccess == 'Success':
+                    if self.webhookSuccess != 'Success':
+                        self.webhook_test()
+                    if not self.webhook_registered:
                         self.webhook_registered = self.myNetatmo.add_webhook()
-                        if self.webhook_registered:
-                            self.node.setDriver('GV29', 1, True, True)
+                    self.node.setDriver('GV29', 1 if (self.webhook_registered and self.webhookSuccess == 'Success') else 0, True, True)
                     for home in self.homes_list:
                         self.myNetatmo.update_weather_info_cloud(home)
                         self.myNetatmo.update_weather_info_instant(home)

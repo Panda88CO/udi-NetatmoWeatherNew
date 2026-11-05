@@ -377,21 +377,35 @@ class NetatmoCloud(OAuth):
         }
         completeUrl = f"https://my.isy.io/api/eisy/pg3/webhook/noresponse/{uuid}/{slot}"
         logging.debug(f' Calling { completeUrl } with body: { body }')
-        try:
-            response = requests.post(completeUrl, headers=headers, json=body, timeout=5)
-            response.raise_for_status()
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
             try:
-                return response.json()
-            except requests.exceptions.JSONDecodeError:
-                return response.text
-        except requests.exceptions.HTTPError as error:
-            logging.error(f"Call post { completeUrl } failed: { error }")
-            if error.response is not None and error.response.status_code == 503:
-                logging.error('Error 503: The MQTT connection to the IoX for this UUID is not online - check that remote connections is active in the ISY Portal on the PG3 -> Remote Connection page.')
-                logging.error('Make sure this work at https://my.isy.io -> Select Tool | PG3 | Remote connection. It should read "Current status: Connected". Note that it may take up to a minute after switching it on to take effect.')
-            elif error.response is not None and error.response.status_code == 423:
-                logging.error('Error 423: The UUID is not found in your portal account or does not have an active license')
-            raise error
+                response = requests.post(completeUrl, headers=headers, json=body, timeout=10)
+                response.raise_for_status()
+                try:
+                    return response.json()
+                except requests.exceptions.JSONDecodeError:
+                    return response.text
+            except requests.exceptions.HTTPError as error:
+                logging.error(f"Call post { completeUrl } failed: { error }")
+                if error.response is not None and error.response.status_code == 503:
+                    logging.error('Error 503: The MQTT connection to the IoX for this UUID is not online - check that remote connections is active in the ISY Portal on the PG3 -> Remote Connection page.')
+                    logging.error('Make sure this work at https://my.isy.io -> Select Tool | PG3 | Remote connection. It should read "Current status: Connected". Note that it may take up to a minute after switching it on to take effect.')
+                elif error.response is not None and error.response.status_code == 423:
+                    logging.error('Error 423: The UUID is not found in your portal account or does not have an active license')
+                if attempt < max_attempts and error.response is not None and error.response.status_code in {429, 500, 502, 503, 504}:
+                    delay = 2 * attempt
+                    logging.warning(f"Webhook test HTTP {error.response.status_code} (attempt {attempt}/{max_attempts}); retrying in {delay}s...")
+                    time.sleep(delay)
+                    continue
+                raise error
+            except requests.exceptions.RequestException as error:
+                if attempt < max_attempts:
+                    delay = 2 * attempt
+                    logging.warning(f"Webhook test request failed ({error}) (attempt {attempt}/{max_attempts}); retrying in {delay}s...")
+                    time.sleep(delay)
+                    continue
+                raise error
 
     def add_webhook(self, webhook_url=None):
         logging.debug('add_webhook called')
