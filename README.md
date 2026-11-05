@@ -60,7 +60,7 @@ The settings for this node are:
 # Release Notes
 Code originally based on the NetatmoWeather node server and updated for OAuth2 and Netatmo Webhooks.
 
-- 0.2.0 11/04/2026
+- 1.1.0 11/05/2026
    - Updated to use the latest Netatmo API with real-time Webhooks (`https://dev.netatmo.com/apidocumentation/webhooks`) instead of short-poll API polling
    - Added startup webhook self-test (`Webhook Test` driver `GV30`, `Connection Status` driver `GV29`, and `Test Connection` command) like `TeslaEV3`
    - Added automatic `WEBHOOK_URL` parameter generation and `/addwebhook` / `/dropwebhook` lifecycle management

@@ -27,7 +27,7 @@ except ImportError:
 from NetatmoWeather import NetatmoWeather
 from udiNetatmoWeatherMain import udiNetatmoWeatherMain
 
-version = '0.2.0'
+version = '1.1.0'
 
 
 class NetatmoController(udi_interface.Node):
