@@ -274,6 +274,8 @@ class NetatmoController(udi_interface.Node):
         self.enabled_list = []
         self.homes_list = []
         primary_node_list = ['controller']  # controller is there for sure
+        new_module_discovered = False
+        any_module_enabled = False
         for home in self.home_ids:
             logging.debug('Adding from {}'.format(home))
             home_name = self.home_ids[home]['name']
@@ -288,8 +290,12 @@ class NetatmoController(udi_interface.Node):
                 tmp_module = {}
                 tmp_module['home'] = home
                 tmp_module['main_module'] = m_module
-                logging.debug('Module {} enabled = {}'.format(node_name, self.myNetatmo.main_module_enabled(node_name)))
-                if self.myNetatmo.main_module_enabled(node_name):
+                if node_name not in self.myNetatmo.customParameters:
+                    new_module_discovered = True
+                is_enabled = self.myNetatmo.main_module_enabled(node_name)
+                logging.debug('Module {} enabled = {}'.format(node_name, is_enabled))
+                if is_enabled:
+                    any_module_enabled = True
                     if tmp_module['home'] not in self.homes_list:
                         self.homes_list.append(tmp_module['home'])
                         self.myNetatmo.update_weather_info_cloud(home)
@@ -299,6 +305,12 @@ class NetatmoController(udi_interface.Node):
                     udiNetatmoWeatherMain(self.poly, node_address, node_address, node_name, self.myNetatmo, tmp_module)
                     primary_node_list.append(node_address)
                     time.sleep(1)
+
+        if any_module_enabled and not new_module_discovered:
+            if 'home_id' in self.poly.Notices:
+                self.poly.Notices.delete('home_id')
+        elif self.home_ids and not any_module_enabled:
+            self.poly.Notices['home_id'] = 'Check config to select which home/modules should be used (1 - used, 0 - not used) - then restart'
         # removing unused nodes
         while not self.configDone:
             logging.info('Waiting for config to comlete')
@@ -334,7 +346,7 @@ class NetatmoController(udi_interface.Node):
                 if 'longPoll' in polltype:
                     # Keep token current and refresh cloud daily min/max/trend values
                     self.myNetatmo.authendicated()
-                    if not self.homes_list:
+                    if not self.home_ids:
                         self.home_ids = self.myNetatmo.get_homes()
                         if self.home_ids:
                             self.node.setDriver('ST', 1, True, True)

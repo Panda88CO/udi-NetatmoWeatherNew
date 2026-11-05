@@ -108,12 +108,15 @@ class NetatmoCloud(OAuth):
     
     def main_module_enabled(self, node_name):
         logging.debug('main_module_enabled called {}'.format(node_name))
-        if node_name in self.customParameters:           
-            return(int(self.customParameters[node_name]) == 1)
+        if node_name in self.customParameters and self.customParameters[node_name] is not None:
+            try:
+                return int(self.customParameters[node_name]) == 1
+            except (ValueError, TypeError):
+                return False
         else:
-            self.customParameters[node_name] = 1 #add and enable by default
+            self.customParameters[node_name] = 0  # add and default to 0 (disabled) until user sets 1
             self.poly.Notices['home_id'] = 'Check config to select which home/modules should be used (1 - used, 0 - not used) - then restart'
-            return(True)
+            return False
 
                 
     def customParamsHandler(self, userParams):
@@ -186,11 +189,20 @@ class NetatmoCloud(OAuth):
         oauthSettingsUpdate['token_endpoint'] = 'https://api.netatmo.com/oauth2/token'
         oauthSettingsUpdate['addRedirect'] = True
         self.updateOauthSettings(oauthSettingsUpdate)
+        if 'WEBHOOK_URL' in self.customParameters:
+            self.customParameters.delete('WEBHOOK_URL')
+
+        reserved_keys = {'clientID', 'ClientID', 'clientSecret', 'ClientSecret', 'TEMP_UNIT', 'WEBHOOK_URL'}
+        for key, val in userParams.items():
+            if key not in reserved_keys:
+                try:
+                    if int(val) == 1 and 'home_id' in self.poly.Notices:
+                        self.poly.Notices.delete('home_id')
+                        break
+                except (ValueError, TypeError):
+                    pass
+
         if client_ok and secret_ok:
-            default_webhook_url = self.get_portal_webhook_url()
-            if 'WEBHOOK_URL' not in self.customParameters or not self.customParameters['WEBHOOK_URL']:
-                if default_webhook_url:
-                    self.customParameters['WEBHOOK_URL'] = default_webhook_url
             self.handleCustomParamsDone = True
             if 'client' in self.poly.Notices:
                 self.poly.Notices.delete('client')
@@ -354,10 +366,6 @@ class NetatmoCloud(OAuth):
         return None
 
     def get_webhook_url(self):
-        if 'WEBHOOK_URL' in self.customParameters and self.customParameters['WEBHOOK_URL']:
-            url = str(self.customParameters['WEBHOOK_URL']).strip()
-            if url:
-                return url
         return self.get_portal_webhook_url()
 
     def testWebhook(self, body):
