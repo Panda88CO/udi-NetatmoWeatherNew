@@ -415,10 +415,10 @@ class NetatmoCloud(OAuth):
             logging.error('No webhook URL available to register with Netatmo')
             return False
         encoded_url = urllib.parse.quote_plus(webhook_url)
-        api_str = f'/addwebhook?url={encoded_url}&app_type=app_station'
+        api_str = f'/addwebhook?url={encoded_url}'
         res = self._callApi('POST', api_str)
         if res is None:
-            api_str_fallback = f'/addwebhook?url={encoded_url}'
+            api_str_fallback = f'/addwebhook?url={encoded_url}&app_type=app_station'
             res = self._callApi('POST', api_str_fallback)
         if isinstance(res, dict) and res.get('status') == 'ok':
             logging.info(f'Successfully registered Netatmo webhook: {webhook_url}')
@@ -428,9 +428,9 @@ class NetatmoCloud(OAuth):
 
     def drop_webhook(self):
         logging.debug('drop_webhook called')
-        res = self._callApi('POST', '/dropwebhook?app_type=app_station')
+        res = self._callApi('POST', '/dropwebhook')
         if res is None:
-            res = self._callApi('POST', '/dropwebhook')
+            res = self._callApi('POST', '/dropwebhook?app_type=app_station')
         if isinstance(res, dict) and res.get('status') == 'ok':
             logging.info('Successfully dropped Netatmo webhook')
             return True

@@ -32,7 +32,6 @@ version = '1.1.0'
 
 class NetatmoController(udi_interface.Node):
     def __init__(self, polyglot, primary, address, name):
-        super(NetatmoController, self).__init__(polyglot, primary, address, name)
         logging.debug('NetatmoController Initializing')
         logging.setLevel(10)
         self.poly = polyglot
@@ -45,7 +44,7 @@ class NetatmoController(udi_interface.Node):
         self.primary = primary
         self.address = address
         self.temp_unit = 0
-        self.nodes_in_db = self.poly.getNodesFromDb()
+        self.nodes_in_db = []
         self.myNetatmo = NetatmoWeather(self.poly)
         self.hb = 0
         self.webhookTestTimeoutSeconds = 5
@@ -70,11 +69,26 @@ class NetatmoController(udi_interface.Node):
         self.poly.subscribe(self.poly.POLL, self.systemPoll)
         self.poly.subscribe(self.poly.WEBHOOK, self.webhook)
 
+        self.poly.updateProfile()
+        self.poly.ready()
+        wait_cnt = 0
+        while not self.configDone and wait_cnt < 50:
+            time.sleep(0.1)
+            wait_cnt += 1
+
+        super(NetatmoController, self).__init__(polyglot, primary, address, name)
+        self._ensure_controller_drivers()
         self.poly.addNode(self)
         self.node = self.poly.getNode(self.address)
         self.nodes_in_db = self.poly.getNodesFromDb()
-        self.poly.updateProfile()
-        self.poly.ready()
+
+    def _ensure_controller_drivers(self):
+        existing = {d['driver'] for d in self.drivers}
+        missing = [dict(d) for d in NetatmoController.drivers if d['driver'] not in existing]
+        if missing:
+            self.drivers.extend(missing)
+            return True
+        return False
 
     def init_webhook(self):
         logging.debug('init_webhook called')
@@ -214,6 +228,9 @@ class NetatmoController(udi_interface.Node):
             time.sleep(1)
             logging.debug('Waiting for PG3x CONFIGDONE to complete')
 
+        if self._ensure_controller_drivers():
+            self.poly.addNode(self)
+
         self.init_webhook()
 
         self.poly.Notices['webhook'] = 'Checking webhook connection'
@@ -351,6 +368,8 @@ class NetatmoController(udi_interface.Node):
         logging.info('configDoneHandler called')
         self.nodes_in_db = self.poly.getNodesFromDb()
         logging.debug('Nodes in Nodeserver - before cleanup: {} - {}'.format(len(self.nodes_in_db), self.nodes_in_db))
+        if hasattr(self, 'drivers') and self._ensure_controller_drivers():
+            self.poly.addNode(self)
         self.configDone = True
 
     def systemPoll(self, polltype):
@@ -401,11 +420,6 @@ class NetatmoController(udi_interface.Node):
     def stopHandler(self):
         logging.info('Stop handler called')
         self.stop_processing_messages = True
-        try:
-            if self.webhook_registered:
-                self.myNetatmo.drop_webhook()
-        except Exception as e:
-            logging.error(f'Error dropping webhook on stop: {e}')
         self.node.setDriver('GV29', 0, True, True)
         # Set nodes offline
         for node in self.poly.nodes():

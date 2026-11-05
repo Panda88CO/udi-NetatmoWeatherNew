@@ -171,10 +171,21 @@ class NetatmoWeather (NetatmoCloud):
         if push_type == 'webhook_activation':
             logging.info('Netatmo webhook activation confirmed')
             return updated_homes
+        if push_type == 'webhook_deletion':
+            logging.warning(f'Netatmo webhook deletion received: {payload}')
+            return updated_homes
 
         home_id = payload.get('home_id')
         device_id = payload.get('device_id') or payload.get('id')
         event_ts = int(payload.get('time_stamp') or payload.get('ts') or payload.get('time_server') or int(time.time()))
+
+        measurement_keys = {
+            'temperature', 'co2', 'humidity', 'noise', 'pressure', 'AbsolutePressure',
+            'rain', 'sum_rain_1', 'sum_rain_24', 'wind_strength', 'wind_angle',
+            'gust_strength', 'gust_angle', 'wind_gust', 'wind_gust_angle'
+        }
+        status_keys = {'reachable', 'rf_strength', 'wifi_strength', 'battery_state', 'battery_level'}
+        sensor_keys = measurement_keys | status_keys
 
         modules_list = []
         if isinstance(payload.get('modules'), list):
@@ -195,12 +206,6 @@ class NetatmoWeather (NetatmoCloud):
                 if 'id' not in candidate:
                     candidate['id'] = payload.get('module_id') or device_id
             elif payload.get('module_id') or device_id:
-                sensor_keys = {
-                    'temperature', 'co2', 'humidity', 'noise', 'pressure', 'AbsolutePressure',
-                    'rain', 'sum_rain_1', 'sum_rain_24', 'wind_strength', 'wind_angle',
-                    'gust_strength', 'gust_angle', 'wind_gust', 'wind_gust_angle', 'reachable',
-                    'rf_strength', 'wifi_strength', 'battery_state', 'battery_level'
-                }
                 if any(k in payload for k in sensor_keys):
                     candidate = dict(payload)
                     candidate['id'] = payload.get('module_id') or device_id
@@ -208,6 +213,7 @@ class NetatmoWeather (NetatmoCloud):
                 modules_list.append(candidate)
 
         updated_inline = False
+        has_inline_measurements = False
         for mod in modules_list:
             if not isinstance(mod, dict):
                 continue
@@ -224,7 +230,11 @@ class NetatmoWeather (NetatmoCloud):
             existing = dict(self.instant_data[resolved_home][mod_type].get(mod_id, {}))
             if isinstance(mod.get('dashboard_data'), dict):
                 existing.update(mod['dashboard_data'])
+                if any(k in mod['dashboard_data'] for k in measurement_keys):
+                    has_inline_measurements = True
             existing.update(mod)
+            if any(k in mod for k in measurement_keys):
+                has_inline_measurements = True
             if 'ts' not in mod and 'last_seen' not in mod and 'time_utc' not in mod:
                 existing['ts'] = event_ts
             elif 'ts' not in existing:
@@ -237,7 +247,10 @@ class NetatmoWeather (NetatmoCloud):
 
         if updated_inline:
             for h_id in updated_homes:
-                self.merge_data(h_id)
+                if not has_inline_measurements:
+                    self.update_weather_info_instant(h_id)
+                else:
+                    self.merge_data(h_id)
             return updated_homes
 
         # If webhook notification did not include inline module measurements (e.g. topology_changed or trigger),
