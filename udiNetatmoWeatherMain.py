@@ -137,17 +137,18 @@ class udiNetatmoWeatherMain(udi_interface.Node):
         return tmp[:14]
     
     def rfstate2ISY(self, rf_state):
-        if rf_state.lower() == 'full':
+        if not rf_state or not isinstance(rf_state, str):
+            return 99
+        if rf_state.lower() in ('full', 'high'):
             rf = 0
         elif rf_state.lower() == 'medium':
             rf = 1
         elif rf_state.lower() == 'low':
             rf = 2
         else:
-            rf= 99
+            rf = 99
             logging.error('Unsupported RF state {}'.format(rf_state))
-        return(rf)
-    
+        return rf
 
     def battery2ISY(self, batlvl):
         if batlvl == 'max':
@@ -164,18 +165,17 @@ class udiNetatmoWeatherMain(udi_interface.Node):
             state = 5
         else:
             state = 99
-        return(state)
-    
-    def trend2ISY (self, trend):
+        return state
+
+    def trend2ISY(self, trend):
         if trend == 'stable':
-            return(0)
+            return 0
         elif trend == 'up':
-            return(1)
-        elif trend =='down':
-            return(2)
+            return 1
+        elif trend == 'down':
+            return 2
         else:
-            logging.error('unsupported temperature trend: {}'.format(trend))
-            return(99)    
+            return 99    
 
 
     def convert_temp_unit(self, tempStr):
@@ -240,29 +240,45 @@ class udiNetatmoWeatherMain(udi_interface.Node):
             if self.weather.get_online(self.module):
                 self.node.setDriver('ST', 1)
                 logging.debug('TempUnit = {} {}'.format(self.weather.temp_unit, self.convert_temp_unit(self.weather.temp_unit)))
+                temp_c = self.weather.get_temperature_C(self.module)
+                min_temp_c = self.weather.get_min_temperature_C(self.module)
+                max_temp_c = self.weather.get_max_temperature_C(self.module)
                 if self.convert_temp_unit(self.weather.temp_unit) == 0:
-                    self.node.setDriver('CLITEMP', round(self.weather.get_temperature_C(self.module),1), True, False, 4 )
-                    self.node.setDriver('GV6', round(self.weather.get_min_temperature_C(self.module),1), True, False, 4 )
-                    self.node.setDriver('GV7', round(self.weather.get_max_temperature_C(self.module),1), True, False, 4 )
+                    if temp_c is not None:
+                        self.node.setDriver('CLITEMP', round(temp_c, 1), True, False, 4)
+                    if min_temp_c is not None:
+                        self.node.setDriver('GV6', round(min_temp_c, 1), True, False, 4)
+                    if max_temp_c is not None:
+                        self.node.setDriver('GV7', round(max_temp_c, 1), True, False, 4)
                 else:
-                    self.node.setDriver('CLITEMP', (round(self.weather.get_temperature_C(self.module)*9/5+32,1)), True, False, 17 )
-                    self.node.setDriver('GV6', (round(self.weather.get_min_temperature_C(self.module)*9/5+32,1)), True, False, 17 )
-                    self.node.setDriver('GV7', (round(self.weather.get_max_temperature_C(self.module)*9/5+32,1)), True, False, 17 )                     
-                self.node.setDriver('CO2LVL', self.weather.get_co2(self.module), True, False, 54)
-                self.node.setDriver('CLIHUM', self.weather.get_humidity(self.module), True, False, 51)
-                self.node.setDriver('GV3', round(self.weather.get_noise(self.module),0), True, False, 12)
-                self.node.setDriver('BARPRES', round(self.weather.get_pressure(self.module),0), True, False, 117)
-                self.node.setDriver('GV5', round(self.weather.get_abs_pressure(self.module),0), True, False, 117)
+                    if temp_c is not None:
+                        self.node.setDriver('CLITEMP', round(temp_c * 9 / 5 + 32, 1), True, False, 17)
+                    if min_temp_c is not None:
+                        self.node.setDriver('GV6', round(min_temp_c * 9 / 5 + 32, 1), True, False, 17)
+                    if max_temp_c is not None:
+                        self.node.setDriver('GV7', round(max_temp_c * 9 / 5 + 32, 1), True, False, 17)
+                co2 = self.weather.get_co2(self.module)
+                if co2 is not None:
+                    self.node.setDriver('CO2LVL', co2, True, False, 54)
+                hum = self.weather.get_humidity(self.module)
+                if hum is not None:
+                    self.node.setDriver('CLIHUM', hum, True, False, 51)
+                noise = self.weather.get_noise(self.module)
+                if noise is not None:
+                    self.node.setDriver('GV3', round(noise, 0), True, False, 12)
+                pres = self.weather.get_pressure(self.module)
+                if pres is not None:
+                    self.node.setDriver('BARPRES', round(pres, 0), True, False, 117)
+                abs_pres = self.weather.get_abs_pressure(self.module)
+                if abs_pres is not None:
+                    self.node.setDriver('GV5', round(abs_pres, 0), True, False, 117)
 
                 temp_trend = self.weather.get_temp_trend(self.module)
                 self.node.setDriver('GV8', self.trend2ISY(temp_trend))
 
-                #hum_trend= self.weather.get_hum_trend(self.module)
-                #self.node.setDriver('GV9', trend_val)
-                self.node.setDriver('GV10', self.weather.get_time_since_time_stamp_min(self.module) , True, False, 44)
-                rf1, rf2 = self.weather.get_rf_info(self.module) 
-                self.node.setDriver('GV11', self.rfstate2ISY(rf1) )
-                #self.node.setDriver('ERR', 0)    
+                self.node.setDriver('GV10', self.weather.get_time_since_time_stamp_min(self.module), True, False, 44)
+                rf1, rf2 = self.weather.get_rf_info(self.module)
+                self.node.setDriver('GV11', self.rfstate2ISY(rf1))    
             else:
                 self.node.setDriver('CLITEMP', 99, True, False, 25 )
                 self.node.setDriver('GV6', 99, True, False, 25 )

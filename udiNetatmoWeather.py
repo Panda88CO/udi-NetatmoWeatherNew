@@ -8,9 +8,13 @@ MIT License
 """
 
 import time
+import json
 import traceback
 import re
 import sys
+import threading
+from threading import Thread
+from queue import Queue, Empty
 
 try:
     import udi_interface
@@ -20,21 +24,11 @@ except ImportError:
     import logging
     logging.basicConfig(level=logging.DEBUG)
 
-#from NetatmoOauth import NetatmoCloud
 from NetatmoWeather import NetatmoWeather
-from  udiNetatmoWeatherMain import udiNetatmoWeatherMain
-#from nodes.controller import Controller
-#from udi_interface import logging, Custom, Interface
-version = '0.1.2'
+from udiNetatmoWeatherMain import udiNetatmoWeatherMain
 
-#polyglot = None
-#myNetatmo = None
-#controller = None
+version = '0.2.0'
 
-#id = 'controller'
-#drivers = [
-#        {'driver': 'ST', 'value':0, 'uom':2},
-#        ]
 
 class NetatmoController(udi_interface.Node):
     def __init__(self, polyglot, primary, address, name):
@@ -42,7 +36,6 @@ class NetatmoController(udi_interface.Node):
         logging.debug('NetatmoController Initializing')
         logging.setLevel(10)
         self.poly = polyglot
-
 
         self.accessTokenEn = True
         self.accessToken = None
@@ -54,34 +47,118 @@ class NetatmoController(udi_interface.Node):
         self.temp_unit = 0
         self.nodes_in_db = self.poly.getNodesFromDb()
         self.myNetatmo = NetatmoWeather(self.poly)
-        self.hb  = 0
-        #logging.debug('testing 1')
-        #self.customParameters = Custom(self.poly, 'customparams')
+        self.hb = 0
+        self.webhookTestTimeoutSeconds = 5
+        self.webhookSuccess = 'Unknown'
+        self.webhookTimer = None
+        self.webhook_registered = False
         self.Notices = Custom(self.poly, 'notices')
         self.n_queue = []
-        #logging.debug('drivers : {}'.format(self.drivers))
+        self.homes_list = []
+
+        self.msg_queue = Queue()
+        self.stop_processing_messages = False
+        self.message_thread = Thread(target=self.process_message, daemon=True)
+
         self.poly.subscribe(self.poly.STOP, self.stopHandler)
         self.poly.subscribe(self.poly.START, self.start, address)
         self.poly.subscribe(self.poly.CUSTOMPARAMS, self.myNetatmo.customParamsHandler)
-        #self.poly.subscribe(self.poly.CUSTOMDATA, self.myNetatmo.customDataHandler)
         self.poly.subscribe(self.poly.CUSTOMNS, self.myNetatmo.customNsHandler)
         self.poly.subscribe(self.poly.OAUTH, self.myNetatmo.oauthHandler)
         self.poly.subscribe(self.poly.CONFIGDONE, self.configDoneHandler)
         self.poly.subscribe(self.poly.ADDNODEDONE, self.node_queue)
         self.poly.subscribe(self.poly.POLL, self.systemPoll)
-
-        #logging.debug('testing 2')
+        self.poly.subscribe(self.poly.WEBHOOK, self.webhook)
 
         self.poly.addNode(self)
-        #logging.debug('drivers : {}'.format(self.drivers))
-        #logging.debug('testing 3')
-        #self.wait_for_node_done()
-        #logging.debug('testing 4')
         self.node = self.poly.getNode(self.address)
-        #logging.debug('testing 5')
         self.nodes_in_db = self.poly.getNodesFromDb()
         self.poly.updateProfile()
         self.poly.ready()
+
+    def init_webhook(self):
+        logging.debug('init_webhook called')
+        self.poly.webhookStart({'name': 'NetatmoWeather'})
+        time.sleep(2)
+
+    def webhook_test(self, param=None):
+        logging.debug(f'webhook_test called {param}')
+        body = {'event': 'webhook-test', 'data': {'type': 'test', 'description': 'webhook test'}}
+        try:
+            self.webhookSuccess = 'Unknown'
+            self.node.setDriver('GV30', 1, True, True)
+            self.myNetatmo.testWebhook(body)
+            self.webhookTimer = threading.Timer(self.webhookTestTimeoutSeconds, self.webhookTimeout)
+            self.webhookTimer.start()
+        except Exception as e:
+            logging.error(f'Error in webhook_test: {e}')
+            self.node.setDriver('GV30', 4, True, True)
+            self.webhookSuccess = 'Failure'
+
+    def webhookTimeout(self):
+        logging.error('Webhook test timed out - Please verify your setup for receiving webhook events.')
+        self.node.setDriver('GV30', 3, True, True)
+        self.webhookSuccess = 'Timeout'
+
+    def activate(self):
+        logging.info('Webhook was invoked and the program has received it')
+        if self.webhookTimer is not None:
+            self.webhookTimer.cancel()
+        self.node.setDriver('GV30', 2, True, True)
+        self.webhookSuccess = 'Success'
+        if 'webhook' in self.poly.Notices:
+            self.poly.Notices.delete('webhook')
+
+    def webhook(self, data):
+        logging.info(f'webhook called with data: {data}')
+        if data is not None:
+            payload = data
+            if isinstance(payload, dict) and 'body' in payload:
+                body_data = payload['body']
+                if isinstance(body_data, str):
+                    try:
+                        payload = json.loads(body_data)
+                    except Exception:
+                        payload = data
+                elif isinstance(body_data, dict):
+                    payload = body_data
+            elif isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except Exception:
+                    return
+
+            if isinstance(payload, dict) and payload.get('event') == 'webhook-test':
+                logging.info('Webhook test received!')
+                self.activate()
+                return
+
+            self.insert_message(payload)
+
+    def insert_message(self, message):
+        self.msg_queue.put(message)
+
+    def process_message(self):
+        logging.info('Starting Netatmo webhook message processor')
+        while not self.stop_processing_messages:
+            try:
+                message = self.msg_queue.get(timeout=5)
+                if message is not None:
+                    self._handle_webhook_message(message)
+            except Empty:
+                continue
+            except Exception as e:
+                logging.error(f'Error processing webhook message: {e}')
+
+    def _handle_webhook_message(self, payload):
+        logging.debug(f'Handling Netatmo webhook payload: {payload}')
+        self.node.setDriver('GV29', 1, True, True)
+        updated_homes = self.myNetatmo.process_webhook_data(payload)
+        if self.nodeDefineDone and updated_homes:
+            nodes = self.poly.nodes()
+            for nde in nodes:
+                if nde.address != 'controller':
+                    nde.updateISYdrivers()
        
 
     def node_queue(self, data):
@@ -124,49 +201,64 @@ class NetatmoController(udi_interface.Node):
 
     def start(self):
         logging.info('Executing start')
-        #self.myNetatmo = NetatmoWeather(self.poly)
-        #self.accessToken = self.myNetatmo.getAccessToken()
-        #logging.debug('Waiting start: {} {} {}'.format(self.configDone, self.myNetatmo.customParamsDone(), self.myNetatmo.customNsDone()))
-        while not (self.configDone and self.myNetatmo.customParamsDone() and self.myNetatmo.customNsDone()):
-        #while not (self.configDone):
-            time.sleep(2)
-            logging.debug('Waiting for config to complete {} {} {}'.format(self.configDone, self.myNetatmo.customParamsDone(),  self.myNetatmo.customNsDone()))
-        #time.sleep(1)
-        #if self.refreshToken and self.client_ID and self.client_SECRET:
-        #    self.myNetatmo._insert_refreshToken(self.refreshToken, self.client_ID, self.client_SECRET)
-        #    logging.debug('AccessToken = {}'.format(self.accessToken))
+        self.init_webhook()
 
-            
+        self.poly.Notices['webhook'] = 'Checking webhook connection'
+        self.webhook_test()
+        time.sleep(2)
+        test_time = 0
+        while self.webhookSuccess == 'Unknown' and test_time < self.webhookTestTimeoutSeconds:
+            logging.debug(f'Waiting for webhook test to complete ({self.webhookSuccess})')
+            time.sleep(1)
+            test_time += 1
+        if self.webhookSuccess != 'Success':
+            logging.error('Webhook test failed - no data will be received')
+            self.poly.Notices['webhook'] = 'Webhook test failed - no data will be received - check node documentation on how to open external access to the eISY/Polisy'
+            self.node.setDriver('GV29', 0, True, True)
+        elif 'webhook' in self.poly.Notices:
+            self.poly.Notices.delete('webhook')
+
+        while not (self.configDone and self.myNetatmo.customParamsDone() and self.myNetatmo.customNsDone()):
+            time.sleep(2)
+            logging.debug('Waiting for config to complete {} {} {}'.format(self.configDone, self.myNetatmo.customParamsDone(), self.myNetatmo.customNsDone()))
+
         while not self.myNetatmo.authendicated():
             logging.warning('Access token is not yet available. Please authenticate.')
             self.poly.Notices['auth'] = 'Please initiate authentication'
-            time.sleep(5)            
+            time.sleep(5)
 
-        
         time.sleep(1)
-        self.poly.Notices.clear()    
+        if 'auth' in self.poly.Notices:
+            self.poly.Notices.delete('auth')
 
         self.home_ids = self.myNetatmo.get_homes()
         if self.home_ids:
             self.node.setDriver('ST', 1, True, True)
 
         self.temp_unit = self.convert_temp_unit(self.myNetatmo.temp_unit)
-        logging.debug('TEMP_UNIT: {}'.format(self.temp_unit ))
+        logging.debug('TEMP_UNIT: {}'.format(self.temp_unit))
 
         while not (self.myNetatmo.customParamsDone() and self.myNetatmo.customNsDone() and self.configDone):
             logging.info('Waiting for configuration to complete')
             time.sleep(1)
+
+        if self.webhookSuccess == 'Success':
+            self.webhook_registered = self.myNetatmo.add_webhook()
+            self.node.setDriver('GV29', 1 if self.webhook_registered else 0, True, True)
+        else:
+            self.webhook_registered = self.myNetatmo.add_webhook()
+
         self.addNodes()
         self.wait_for_node_done()
 
+        if not self.message_thread.is_alive():
+            self.message_thread.start()
 
     def addNodes(self):
-
         logging.info('Adding selected weather stations')
-        selected = False
         self.enabled_list = []
         self.homes_list = []
-        primary_node_list = ['controller'] # controller is there for sure 
+        primary_node_list = ['controller']  # controller is there for sure
         for home in self.home_ids:
             logging.debug('Adding from {}'.format(home))
             home_name = self.home_ids[home]['name']
@@ -175,32 +267,24 @@ class NetatmoController(udi_interface.Node):
             for m_module in main_modules:
                 logging.debug('{} Evalating MAIN module {} - {}'.format(home_name, m_module, main_modules))
                 mod_name = main_modules[m_module]['name']
-                node_name = home_name + '_'+ mod_name
+                node_name = home_name + '_' + mod_name
                 node_address = self.getValidAddress(m_module)
                 node_name = self.getValidName(node_name)
                 tmp_module = {}
                 tmp_module['home'] = home
                 tmp_module['main_module'] = m_module
-                logging.debug('Module {} enabled = {}'.format(node_name, self.myNetatmo.main_module_enabled(node_name) ))
+                logging.debug('Module {} enabled = {}'.format(node_name, self.myNetatmo.main_module_enabled(node_name)))
                 if self.myNetatmo.main_module_enabled(node_name):
-                    #self.enabled_list.append(tmp_module)
-                    #logging.debug('enabled list {}'.format(self.enabled_list))
                     if tmp_module['home'] not in self.homes_list:
                         self.homes_list.append(tmp_module['home'])
                         self.myNetatmo.update_weather_info_cloud(home)
                         self.myNetatmo.update_weather_info_instant(home)
-                    #logging.debug('enabled list - outside {}'.format(self.enabled_list))
-                    #for node_nbr in range(0,len(self.enabled_list)):
-                    #module_info = self.enabled_list[node_nbr]
-                    #logging.debug('module_info {}'.format(module_info))
-                    #module = self.myNetatmo.get_module_info(tmp_module['home'],tmp_module['main_module'])
-                    #logging.debug('module info {}'.format(module))
 
-                    logging.debug('Names: {}, Addresses {} info {}'.format(node_name , node_address, tmp_module ))
+                    logging.debug('Names: {}, Addresses {} info {}'.format(node_name, node_address, tmp_module))
                     udiNetatmoWeatherMain(self.poly, node_address, node_address, node_name, self.myNetatmo, tmp_module)
                     primary_node_list.append(node_address)
-                    time.sleep(1)            
-        #removing unused nodes
+                    time.sleep(1)
+        # removing unused nodes
         while not self.configDone:
             logging.info('Waiting for config to comlete')
             time.sleep(1)
@@ -215,79 +299,63 @@ class NetatmoController(udi_interface.Node):
 
         self.nodeDefineDone = True
 
-    
     def configDoneHandler(self):
         # We use this to discover devices, or ask to authenticate if user has not already done so
         self.poly.Notices.clear()
         logging.info('configDoneHandler called')
-        #self.myNetatmo.updateOauthConfig()
         self.nodes_in_db = self.poly.getNodesFromDb()
-        logging.debug('Nodes in Nodeserver - before cleanup: {} - {}'.format(len(self.nodes_in_db),self.nodes_in_db))
+        logging.debug('Nodes in Nodeserver - before cleanup: {} - {}'.format(len(self.nodes_in_db), self.nodes_in_db))
         self.configDone = True
-        
-        #res = self.myNetatmo.get_home_info()
-        #logging.debug('retrieved get_home_info data {}'.format(res))
 
-        #res = self.myNetatmo.get_weather_info()
-        #logging.debug('retrieved get_weather_info data {}'.format(res))
-
-        #res = self.myNetatmo.get_weather_info2()
-        #logging.debug('retrieved get_weather_info2 data2 {}'.format(res))
-
-        #self.poly.discoverDevices()
-
-    '''
-    def addNodeDoneHandler(self, data):
-        self.n_queue.append(data['address'])
-        # We will automatically query the device after discovery
-        #self.poly.addNodeDoneHandler(node)
-        #self.nodeDefineDone = True
-        #pass
-    '''
-    def systemPoll (self, polltype):
+    def systemPoll(self, polltype):
         if self.nodeDefineDone:
             logging.info('System Poll executing: {}'.format(polltype))
             nodes = self.poly.nodes()
-            #logging.debug('nodes : {}'.format(nodes))
             try:
                 if 'longPoll' in polltype:
-                    #Keep token current
-                    #self.node.setDriver('GV0', self.temp_unit, True, True)
-                    
-                    #self.myNetatmo.refresh_token()
+                    # Keep token current and refresh cloud daily min/max/trend values
+                    self.myNetatmo.authendicated()
+                    if not self.webhook_registered and self.webhookSuccess == 'Success':
+                        self.webhook_registered = self.myNetatmo.add_webhook()
+                        if self.webhook_registered:
+                            self.node.setDriver('GV29', 1, True, True)
                     for home in self.homes_list:
                         self.myNetatmo.update_weather_info_cloud(home)
-                        self.myNetatmo.update_weather_info_instant(home)
+                        if not self.webhook_registered:
+                            self.myNetatmo.update_weather_info_instant(home)
 
-
-                    #nodes = self.poly.getNodes()
                     for nde in nodes:
-                        if nde.address != 'controller':   # but not the setup node
+                        if nde.address != 'controller':  # but not the setup node
                             logging.debug('updating node {} data'.format(nde))
                             nde.updateISYdrivers()
-                                                
+
                 if 'shortPoll' in polltype:
                     self.heartbeat()
-                    #self.myNetatmo.refresh_token()
-                    for home in self.homes_list:
-                        self.myNetatmo.update_weather_info_instant(home)
+                    # Real-time updates arrive via Netatmo webhooks; only poll /homestatus as fallback if webhook is not active
+                    if not self.webhook_registered:
+                        for home in self.homes_list:
+                            self.myNetatmo.update_weather_info_instant(home)
                     for nde in nodes:
-                        if nde.address != 'controller':   # but not the setup node
+                        if nde.address != 'controller':  # but not the setup node
                             logging.debug('updating node {} data'.format(nde))
-                            nde.updateISYdrivers()                   
+                            nde.updateISYdrivers()
             except Exception as e:
-                    logging.error('Exeption occcured : {}'.format(e))
-   
-                
+                logging.error('Exeption occcured : {}'.format(e))
         else:
             logging.info('System Poll - Waiting for all nodes to be added')
- 
 
     def stopHandler(self):
+        logging.info('Stop handler called')
+        self.stop_processing_messages = True
+        try:
+            if self.webhook_registered:
+                self.myNetatmo.drop_webhook()
+        except Exception as e:
+            logging.error(f'Error dropping webhook on stop: {e}')
+        self.node.setDriver('GV29', 0, True, True)
         # Set nodes offline
         for node in self.poly.nodes():
             if hasattr(node, 'setOffline'):
-                #node.setDriver('ERR', 1)
                 node.setOffline()
         self.poly.stop()
 
@@ -300,39 +368,37 @@ class NetatmoController(udi_interface.Node):
                     self.myNetatmo.update_weather_info_cloud(home)
                     self.myNetatmo.update_weather_info_instant(home)
                 for nde in nodes:
-                    if nde.address != 'controller':   # but not the setup node
+                    if nde.address != 'controller':  # but not the setup node
                         logging.debug('updating node {} data'.format(nde))
                         nde.updateISYdrivers()
-                                            
             except Exception as e:
-                    logging.error('Exeption occcured : {}'.format(e))
+                logging.error('Exeption occcured : {}'.format(e))
+
     id = 'controller'
-    drivers =  [ {'driver': 'ST', 'value':0, 'uom':2}, ]
-    commands = { 'UPDATE': update, }
+    drivers = [
+        {'driver': 'ST', 'value': 0, 'uom': 2},
+        {'driver': 'GV29', 'value': 99, 'uom': 25},
+        {'driver': 'GV30', 'value': 99, 'uom': 25},
+    ]
+    commands = {
+        'UPDATE': update,
+        'TESTCON': webhook_test,
+    }
+
 
 if __name__ == "__main__":
     try:
-        logging.info ('starting')
+        logging.info('starting')
         logging.info('Starting Netatmo Controller')
-        polyglot = udi_interface.Interface([])
-        #polyglot.start('0.2.31')
+        polyglot = udi_interface.Interface([], {"enableWebhook": True})
 
-        polyglot.start({ 'version': version, 'requestId': True })
+        polyglot.start({'version': version, 'requestId': True})
 
         # Show the help in PG3 UI under the node's Configuration option
         polyglot.setCustomParamsDoc()
 
-        # Update the profile files
-        #polyglot.updateProfile()
-
-        # Implements the API calls & Handles the oAuth authentication & token renewals
-        #myNetatmo = NetatmoWeather(polyglot)
-
         # then you need to create the controller node
         NetatmoController(polyglot, 'controller', 'controller', 'Netatmo Weather')
-
-        # subscribe to the events we want
-        # polyglot.subscribe(polyglot.POLL, pollHandler)
 
         # We can start receive events
         polyglot.ready()
@@ -346,6 +412,7 @@ if __name__ == "__main__":
     except Exception:
         logging.error(f"Error starting Nodeserver: {traceback.format_exc()}")
         polyglot.stop()
+
 
 
 

@@ -3,11 +3,17 @@
     <editors />
     <sts>
       <st id="ST" editor="bool" />
+      <st id="GV29" editor="STREAMSYNC" />
+      <st id="GV30" editor="TESTCON" />
     </sts>
     <cmds>
-      <sends />
+      <sends>
+        <cmd id="DON" />
+        <cmd id="DOF" />
+      </sends>
       <accepts>
-        <cmd id="UPDATE" />  
+        <cmd id="UPDATE" />
+        <cmd id="TESTCON" />
       </accepts>
     </cmds>
   </nodeDef>

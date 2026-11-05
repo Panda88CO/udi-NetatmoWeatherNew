@@ -120,52 +120,73 @@ class NetatmoCloud(OAuth):
         self.customParameters.load(userParams)
         logging.debug('customParamsHandler called {}'.format(userParams))
         client_ok = False
-        client_secret = False
+        secret_ok = False
         oauthSettingsUpdate = {}
-        # Example for a boolean field
+        invalid_client_ids = {'', 'enter client_id', 'enter clientid', 'client_id', 'clientid'}
+        invalid_client_secrets = {'', 'enter client_secret', 'enter clientsecret', 'client_secret', 'clientsecret'}
 
-        if 'clientID' in userParams:
-            if self.customParameters['clientID'] != 'enter client_id':
-                self.client_ID = self.customParameters['clientID']
-                oauthSettingsUpdate['client_id'] = self.customParameters['clientID']
+        client_id_val = userParams.get('clientID') if 'clientID' in userParams else userParams.get('ClientID')
+        if client_id_val is not None:
+            cleaned_id = str(client_id_val).strip()
+            if cleaned_id.lower() not in invalid_client_ids and not cleaned_id.lower().startswith('enter '):
+                self.client_ID = cleaned_id
+                oauthSettingsUpdate['client_id'] = cleaned_id
                 client_ok = True
+            else:
+                self.client_ID = None
         else:
-            logging.warnig('No clientID found')
+            logging.warning('No clientID found')
             self.customParameters['clientID'] = 'enter client_id'
             self.client_ID = None
-            
-        if 'clientSecret' in self.customParameters:
-            if self.customParameters['clientSecret'] != 'enter client_secret':
-                self.client_SECRET = self.customParameters['clientSecret'] 
-                oauthSettingsUpdate['client_secret'] = self.customParameters['clientSecret']
+
+        client_secret_val = (
+            userParams.get('clientSecret')
+            if 'clientSecret' in userParams
+            else userParams.get('ClientSecret')
+        )
+        if client_secret_val is None:
+            client_secret_val = (
+                self.customParameters['clientSecret']
+                if 'clientSecret' in self.customParameters
+                else (self.customParameters['ClientSecret'] if 'ClientSecret' in self.customParameters else None)
+            )
+        if client_secret_val is not None:
+            cleaned_secret = str(client_secret_val).strip()
+            if cleaned_secret.lower() not in invalid_client_secrets and not cleaned_secret.lower().startswith('enter '):
+                self.client_SECRET = cleaned_secret
+                oauthSettingsUpdate['client_secret'] = cleaned_secret
                 secret_ok = True
+            else:
+                self.client_SECRET = None
         else:
-            logging.warnig('No clientSecret found')
+            logging.warning('No clientSecret found')
             self.customParameters['clientSecret'] = 'enter client_secret'
             self.client_SECRET = None
 
-        if not client_ok  or not secret_ok:
+        if not client_ok or not secret_ok:
+            self.handleCustomParamsDone = False
             self.poly.Notices['client'] = 'Please enter valid clientID and clientSecret - then restart'
 
-        if "TEMP_UNIT" in self.customParameters:
-            self.temp_unit = self.customParameters['TEMP_UNIT'][0].upper()
+        if "TEMP_UNIT" in self.customParameters and self.customParameters['TEMP_UNIT']:
+            self.temp_unit = str(self.customParameters['TEMP_UNIT'])[0].upper()
         else:
-            self.temp_unit = 0
+            self.temp_unit = 'C'
             self.customParameters['TEMP_UNIT'] = 'C'
 
-        #if 'refresh_token' in self.customParameters:
-        #    if self.customParameters['refresh_token'] is not None and self.customParameters['refresh_token'] != "":
-        #        self.customData.token['refresh_token'] = self.customParameters['refresh_token']
+        default_webhook_url = self.get_portal_webhook_url()
+        if 'WEBHOOK_URL' not in self.customParameters or not self.customParameters['WEBHOOK_URL']:
+            if default_webhook_url:
+                self.customParameters['WEBHOOK_URL'] = default_webhook_url
+
         oauthSettingsUpdate['scope'] = self.scope
         oauthSettingsUpdate['auth_endpoint'] = 'https://api.netatmo.com/oauth2/authorize'
         oauthSettingsUpdate['token_endpoint'] = 'https://api.netatmo.com/oauth2/token'
-        #oauthSettingsUpdate['cloudlink'] = True
         oauthSettingsUpdate['addRedirect'] = True
-        self.updateOauthSettings(oauthSettingsUpdate)    
-        #logging.debug('Updated oAuth config: {}'.format(self.getOauthSettings()))
+        self.updateOauthSettings(oauthSettingsUpdate)
         if client_ok and secret_ok:
             self.handleCustomParamsDone = True
-            self.poly.Notices.clear()
+            if 'client' in self.poly.Notices:
+                self.poly.Notices.delete('client')
 
         #self.updateOauthConfig()
         #self.myParamBoolean = ('myParam' in self.customParametersand self.customParameters['myParam'].lower() == 'true')
@@ -237,7 +258,7 @@ class NetatmoCloud(OAuth):
         except ValueError as err:
             logging.warning('Access token is not yet available. Please authenticate.')
             self.poly.Notices['auth'] = 'Please initiate authentication'
-            return
+            return None
         if accessToken is None:
             logging.error('Access token is not available')
             return None
@@ -252,21 +273,24 @@ class NetatmoCloud(OAuth):
             'Authorization': f"Bearer { accessToken }"
         }
 
-        if method in [ 'PATCH', 'POST'] and body is None:
+        if method in ['PATCH'] and body is None:
             logging.error(f"body is required when using { method } { completeUrl }")
         logging.debug(' call info url={}, header= {}, body = {}'.format(completeUrl, headers, body))
 
         try:
             if method == 'GET':
-                response = requests.get(completeUrl, headers=headers)
+                response = requests.get(completeUrl, headers=headers, timeout=15)
             elif method == 'DELETE':
-                response = requests.delete(completeUrl, headers=headers)
+                response = requests.delete(completeUrl, headers=headers, timeout=15)
             elif method == 'PATCH':
-                response = requests.patch(completeUrl, headers=headers, json=body)
+                response = requests.patch(completeUrl, headers=headers, json=body, timeout=15)
             elif method == 'POST':
-                response = requests.post(completeUrl, headers=headers, json=body)
+                if body is not None:
+                    response = requests.post(completeUrl, headers=headers, json=body, timeout=15)
+                else:
+                    response = requests.post(completeUrl, headers=headers, timeout=15)
             elif method == 'PUT':
-                response = requests.put(completeUrl, headers=headers)
+                response = requests.put(completeUrl, headers=headers, timeout=15)
 
             response.raise_for_status()
             try:
@@ -277,6 +301,84 @@ class NetatmoCloud(OAuth):
         except requests.exceptions.HTTPError as error:
             logging.error(f"Call { method } { completeUrl } failed: { error }")
             return None
+        except requests.exceptions.RequestException as error:
+            logging.error(f"Request { method } { completeUrl } failed: { error }")
+            return None
+
+    def get_portal_webhook_url(self):
+        try:
+            config = self.poly.getConfig()
+            uuid = config.get('uuid')
+            slot = config.get('profileNum')
+            if uuid and slot is not None:
+                return f"https://my.isy.io/api/eisy/pg3/webhook/noresponse/{uuid}/{slot}"
+        except Exception as e:
+            logging.error(f"Error building portal webhook URL: {e}")
+        return None
+
+    def get_webhook_url(self):
+        if 'WEBHOOK_URL' in self.customParameters and self.customParameters['WEBHOOK_URL']:
+            url = str(self.customParameters['WEBHOOK_URL']).strip()
+            if url:
+                return url
+        return self.get_portal_webhook_url()
+
+    def testWebhook(self, body):
+        config = self.poly.getConfig()
+        uuid = config['uuid']
+        slot = config['profileNum']
+        headers = {
+            "Content-Type": "application/json"
+        }
+        completeUrl = f"https://my.isy.io/api/eisy/pg3/webhook/noresponse/{uuid}/{slot}"
+        logging.debug(f' Calling { completeUrl } with body: { body }')
+        try:
+            response = requests.post(completeUrl, headers=headers, json=body, timeout=5)
+            response.raise_for_status()
+            try:
+                return response.json()
+            except requests.exceptions.JSONDecodeError:
+                return response.text
+        except requests.exceptions.HTTPError as error:
+            logging.error(f"Call post { completeUrl } failed: { error }")
+            if error.response is not None and error.response.status_code == 503:
+                logging.error('Error 503: The MQTT connection to the IoX for this UUID is not online - check that remote connections is active in the ISY Portal on the PG3 -> Remote Connection page.')
+                logging.error('Make sure this work at https://my.isy.io -> Select Tool | PG3 | Remote connection. It should read "Current status: Connected". Note that it may take up to a minute after switching it on to take effect.')
+            elif error.response is not None and error.response.status_code == 423:
+                logging.error('Error 423: The UUID is not found in your portal account or does not have an active license')
+            raise error
+
+    def add_webhook(self, webhook_url=None):
+        logging.debug('add_webhook called')
+        if webhook_url is None:
+            webhook_url = self.get_webhook_url()
+        if not webhook_url:
+            logging.error('No webhook URL available to register with Netatmo')
+            return False
+        encoded_url = urllib.parse.quote_plus(webhook_url)
+        api_str = f'/addwebhook?url={encoded_url}'
+        res = self._callApi('POST', api_str)
+        if res is None:
+            # Fallback with app_station parameter for older Netatmo station endpoints
+            api_str_fallback = f'/addwebhook?url={encoded_url}&app_type=app_station'
+            res = self._callApi('POST', api_str_fallback)
+        if isinstance(res, dict) and res.get('status') == 'ok':
+            logging.info(f'Successfully registered Netatmo webhook: {webhook_url}')
+            return True
+        logging.warning(f'Netatmo addwebhook response: {res}')
+        return res is not None
+
+    def drop_webhook(self):
+        logging.debug('drop_webhook called')
+        api_str = '/dropwebhook'
+        res = self._callApi('POST', api_str)
+        if res is None:
+            res = self._callApi('POST', '/dropwebhook?app_type=app_station')
+        if isinstance(res, dict) and res.get('status') == 'ok':
+            logging.info('Successfully dropped Netatmo webhook')
+            return True
+        logging.debug(f'Netatmo dropwebhook response: {res}')
+        return False
 
     # Then implement your service specific APIs
     '''
@@ -323,59 +425,69 @@ class NetatmoCloud(OAuth):
 
     def process_homes_data(self, net_system):
         homes_list = {}
+        if not net_system or 'homes' not in net_system:
+            return homes_list
         for home in range(0, len(net_system['homes'])):
             tmp = net_system['homes'][home]
-            homes_list[tmp['id']]= {}
-            homes_list[tmp['id']]['name']= tmp['name']
+            homes_list[tmp['id']] = {}
+            homes_list[tmp['id']]['name'] = tmp.get('name', tmp['id'])
             homes_list[tmp['id']]['modules'] = {}
             homes_list[tmp['id']]['module_types'] = []
             if 'modules' in tmp:
-                for mod in range(0,len(tmp['modules'])):
+                for mod in range(0, len(tmp['modules'])):
                     homes_list[tmp['id']]['modules'][tmp['modules'][mod]['id']] = tmp['modules'][mod]
-                    homes_list[tmp['id']]['module_types'].append( tmp['modules'][mod]['type'] )
-        return(homes_list)
-
-
+                    homes_list[tmp['id']]['module_types'].append(tmp['modules'][mod]['type'])
+        return homes_list
 
     def get_homes_info(self):
         logging.debug('get_home_info')
         api_str = '/homesdata'
-        temp = self._callApi('GET', api_str )
+        temp = self._callApi('GET', api_str)
+        if not temp or 'body' not in temp:
+            self.homes_list = {}
+            return self.homes_list
         self.netatmo_systems = temp['body']
         logging.debug(self.netatmo_systems)
         self.homes_list = self.process_homes_data(self.netatmo_systems)
-        return(self.homes_list)
-
+        return self.homes_list
 
     def get_home_status(self, home_id):
         status = {}
         logging.debug('get_home_status')
         try:
             if home_id:
-                home_id_str = urllib.parse.quote_plus(home_id )
-                api_str = '/homestatus?home_id='+str(home_id_str)
-
+                home_id_str = urllib.parse.quote_plus(home_id)
+                api_str = '/homestatus?home_id=' + str(home_id_str)
+            else:
+                return None
 
             tmp = self._callApi('GET', api_str)
-            if tmp:
-                tmp = tmp['body']
-                if 'errors' not in tmp:
-                    tmp = tmp['home']
-                    status[home_id] = home_id #tmp['body']['body']['home']
-                    if 'modules' in tmp:
+            if tmp and 'body' in tmp:
+                meas_time = int(tmp.get('time_server', int(time.time())))
+                tmp_body = tmp['body']
+                if 'errors' not in tmp_body and 'home' in tmp_body:
+                    home_data = tmp_body['home']
+                    status[home_id] = home_id
+                    if 'modules' in home_data:
                         status['modules'] = {}
                         status['module_types'] = []
-                        for mod in range(0,len(tmp['modules'])):
-                            status['modules'][tmp['modules'][mod]['id']]= tmp['modules'][mod]
-                            status['module_types'].append(tmp['modules'][mod]['type'])
+                        for mod in range(0, len(home_data['modules'])):
+                            mod_entry = dict(home_data['modules'][mod])
+                            if 'ts' not in mod_entry:
+                                mod_entry['ts'] = mod_entry.get('last_seen', meas_time)
+                            if 'reachable' not in mod_entry:
+                                mod_entry['reachable'] = True
+                            status['modules'][mod_entry['id']] = mod_entry
+                            status['module_types'].append(mod_entry['type'])
                     logging.debug(status)
                 else:
-                    status['error'] = tmp['error']
+                    status['error'] = tmp_body.get('errors') or tmp_body.get('error')
 
-                return(status)
+                return status
+            return None
         except Exception as e:
             logging.error('Error get home status : {}'.format(e))
-            return(None)
+            return None
 
     def get_modules(self, home_id):
         '''get_modules'''

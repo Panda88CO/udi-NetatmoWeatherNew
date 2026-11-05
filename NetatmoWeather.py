@@ -1,6 +1,7 @@
 
 #!/usr/bin/env python3
-from  NetatmoOauth import NetatmoCloud 
+import time
+from NetatmoOauth import NetatmoCloud 
 import urllib.parse
 from datetime import datetime, timezone
 
@@ -38,234 +39,313 @@ class NetatmoWeather (NetatmoCloud):
     #    all_systems = 
 
 
-    def update_weather_info_cloud (self, home_id):
+    def update_weather_info_cloud(self, home_id):
         ''' Polls latest data stored in cloud - more data available'''
         logging.debug('get_weather_info_cloud')
         try:
             tmp = self.get_modules(home_id)
             logging.debug('tmp = {}'.format(tmp))
+            if not tmp:
+                return {}
             self.cloud_data[home_id] = {}
             for dev_id in tmp:
                 if tmp[dev_id]['type'] in self.MAIN_modules:
-                    
-                    dev_id_str = urllib.parse.quote_plus(dev_id )
-
-                    api_str = '/getstationsdata?device_id='+str(dev_id_str)+'&get_favorites=false'
-                    
-                    temp_data = self._callApi('GET', api_str )
-
+                    dev_id_str = urllib.parse.quote_plus(dev_id)
+                    api_str = '/getstationsdata?device_id=' + str(dev_id_str) + '&get_favorites=false'
+                    temp_data = self._callApi('GET', api_str)
                     logging.debug('dev Id {}, data: {} '.format(dev_id, temp_data))
-
-                    #test = self._callApi('GET', '/getstationsdata' )
-                    #logging.debug(temp_data)
-                    if 'status'  in temp_data:
-                        if temp_data['status'] == 'ok':
-                            if len(temp_data['body']['devices'] ) == 1:
-                                temp_data = temp_data['body']['devices'][0]  # there should only be 1 dev_id
+                    if temp_data and 'status' in temp_data and temp_data['status'] == 'ok':
+                        devices = temp_data.get('body', {}).get('devices', [])
+                        if not devices:
+                            continue
+                        if len(devices) > 1:
+                            logging.error('Code only handles 1st main weather station : {} found'.format(len(devices)))
+                            logging.error('Processing first one')
+                        device_data = devices[0]
+                        logging.debug('past temp data {}'.format(device_data))
+                        self.cloud_data[home_id] = {
+                            'MAIN': {},
+                            'INDOOR': {},
+                            'OUTDOOR': {},
+                            'RAIN': {},
+                            'WIND': {}
+                        }
+                        main_entry = {}
+                        if 'dashboard_data' in device_data:
+                            main_entry.update(device_data['dashboard_data'])
+                        main_entry['reachable'] = device_data.get('reachable', True)
+                        main_entry['online'] = device_data.get('reachable', 'dashboard_data' in device_data)
+                        if 'data_type' in device_data:
+                            main_entry['data_type'] = device_data['data_type']
+                        if 'wifi_status' in device_data and 'wifi_strength' not in main_entry:
+                            main_entry['wifi_strength'] = device_data['wifi_status']
+                        self.cloud_data[home_id]['MAIN'][dev_id] = main_entry
+                        logging.debug('past main {}'.format(self.cloud_data))
+                        for mod in device_data.get('modules', []):
+                            mod_type = self.module_type(mod.get('type'))
+                            if not mod_type:
+                                continue
+                            mod_id = mod.get('_id') or mod.get('id')
+                            if not mod_id:
+                                continue
+                            logging.debug('{} {}c data {}, mod  {}'.format(mod_type, mod_id, self.cloud_data, mod))
+                            mod_entry = {}
+                            if 'dashboard_data' in mod:
+                                mod_entry.update(mod['dashboard_data'])
+                                mod_entry['online'] = mod.get('reachable', True)
                             else:
-                                logging.error('Code only handles 1st main weather station : {} found'.format(len(temp_data['body']['devices'])))
-                                logging.error('Processing first one')
-                                temp_data = temp_data['body']['devices'][0]
-                            logging.debug('past temp data {}'.format(temp_data))
-                            self.cloud_data[home_id] = {}
-                            self.cloud_data[home_id]['MAIN'] = {}
-                            self.cloud_data[home_id]['INDOOR'] = {}
-                            self.cloud_data[home_id]['OUTDOOR'] = {}
-                            self.cloud_data[home_id]['RAIN'] = {}
-                            self.cloud_data[home_id]['WIND'] = {}
-                            self.cloud_data[home_id]['MAIN'][dev_id] = {}
-                            self.cloud_data[home_id]['MAIN'][dev_id]['reachable'] = temp_data['reachable']
-                            self.cloud_data[home_id]['MAIN'][dev_id]['data_type'] = temp_data['data_type']
-                            if 'dashboard_data' in temp_data:
-                                self.cloud_data[home_id]['MAIN'][dev_id] = temp_data['dashboard_data']
-                                self.cloud_data[home_id]['MAIN'][dev_id]['online'] = True
-                            else:
-                                self.cloud_data[home_id]['MAIN'][dev_id]['online'] = True
-                            logging.debug('past main {}'.format(self.cloud_data))
-                            for module in range(0,len(temp_data['modules'])):
-                                mod = temp_data['modules'][module]
-                                logging.debug('{} {}c data {}, mod  {}'.format(self.module_type(mod['type']),mod['_id'], self.cloud_data, mod))
-                                self.cloud_data[home_id][self.module_type(mod['type'])][mod['_id']] = {}
-                                if 'dashboard_data' in mod:
-                                    self.cloud_data[home_id][self.module_type(mod['type'])][mod['_id']]['online'] = True 
-                                    self.cloud_data[home_id][self.module_type(mod['type'])][mod['_id']] = mod['dashboard_data']
-                                else:
-                                    self.cloud_data[home_id][self.module_type(mod['type'])][mod['_id']]['online'] = False                                   
-                                self.cloud_data[home_id][self.module_type(mod['type'])][mod['_id']]['data_type'] = mod['data_type']
+                                mod_entry['online'] = mod.get('reachable', False)
+                            mod_entry['reachable'] = mod.get('reachable', mod_entry['online'])
+                            if 'data_type' in mod:
+                                mod_entry['data_type'] = mod['data_type']
+                            if 'rf_status' in mod and 'rf_strength' not in mod_entry:
+                                mod_entry['rf_strength'] = mod['rf_status']
+                            if 'battery_vp' in mod and 'battery_level' not in mod_entry:
+                                mod_entry['battery_level'] = mod['battery_vp']
+                            self.cloud_data[home_id][mod_type][mod_id] = mod_entry
                         logging.debug('data before merge: {}'.format(self.cloud_data))
-                        self.merge_data(home_id)         
-            return(self.cloud_data)
+                        self.merge_data(home_id)
+            return self.cloud_data
         except Exception as e:
             logging.error('update_weather_info_cloud failed : {}'.format(e))
-            return({})
+            return {}
 
-
-    def module_type (self, type):
+    def module_type(self, type):
         if type in self.MAIN_modules:
-            return('MAIN')
+            return 'MAIN'
         elif type in self.OUTDOOR_modules:
-            return('OUTDOOR')
+            return 'OUTDOOR'
         elif type in self.INDOOR_modules:
-            return('INDOOR')
+            return 'INDOOR'
         elif type in self.RAIN_modules:
-            return('RAIN')
+            return 'RAIN'
         elif type in self.WIND_modules:
-            return('WIND')                    
+            return 'WIND'
+        return None
 
+    def _ensure_instant_home(self, home_id):
+        if home_id not in self.instant_data or not isinstance(self.instant_data[home_id], dict):
+            self.instant_data[home_id] = {}
+        for mtype in ('MAIN', 'OUTDOOR', 'INDOOR', 'RAIN', 'WIND'):
+            if mtype not in self.instant_data[home_id]:
+                self.instant_data[home_id][mtype] = {}
 
     def update_weather_info_instant(self, home_id):
         '''Polls latest data - within 10 sec '''
         logging.debug('update_weather_info_instant')
         tmp = self.get_home_status(home_id)
-        if home_id not in self.instant_data:
-            self.instant_data[home_id] = {}
-            self.instant_data[home_id]['MAIN'] = {}
-            self.instant_data[home_id]['OUTDOOR'] = {}
-            self.instant_data[home_id]['INDOOR'] = {}
-            self.instant_data[home_id]['RAIN'] = {}
-            self.instant_data[home_id]['WIND'] = {}
-        if 'modules' in tmp:
+        self._ensure_instant_home(home_id)
+        if tmp and 'modules' in tmp:
             for module in tmp['modules']:
-                #self.instant_data[home_id][module] = tmp['modules'][module]
-                self.instant_data[home_id][self.module_type(tmp['modules'][module]['type'])][module] = tmp['modules'][module]
-        else:
-            self.instant_data[home_id] = {}
+                mod_info = tmp['modules'][module]
+                mod_type = self.module_type(mod_info.get('type'))
+                if mod_type:
+                    self.instant_data[home_id][mod_type][module] = mod_info
         self.merge_data(home_id)
-        return(self.instant_data)
-    
+        return self.instant_data
+
+    def _resolve_home_and_type(self, mod_id, home_id=None, raw_type=None):
+        resolved_home = home_id
+        resolved_type = raw_type
+        if hasattr(self, 'homes_list') and self.homes_list:
+            if resolved_home and resolved_home in self.homes_list:
+                if mod_id in self.homes_list[resolved_home].get('modules', {}):
+                    if not resolved_type:
+                        resolved_type = self.homes_list[resolved_home]['modules'][mod_id].get('type')
+            else:
+                for h_id, h_data in self.homes_list.items():
+                    if mod_id in h_data.get('modules', {}):
+                        resolved_home = h_id
+                        if not resolved_type:
+                            resolved_type = h_data['modules'][mod_id].get('type')
+                        break
+        return resolved_home, resolved_type
+
+    def process_webhook_data(self, payload):
+        '''Processes incoming Netatmo webhook payload and updates instant_data + weather_data'''
+        logging.debug(f'process_webhook_data: {payload}')
+        updated_homes = set()
+        if not isinstance(payload, dict):
+            return updated_homes
+
+        push_type = payload.get('push_type') or payload.get('event_type')
+        if push_type == 'webhook_activation':
+            logging.info('Netatmo webhook activation confirmed')
+            return updated_homes
+
+        home_id = payload.get('home_id')
+        device_id = payload.get('device_id') or payload.get('id')
+        event_ts = int(payload.get('time_stamp') or payload.get('ts') or payload.get('time_server') or int(time.time()))
+
+        modules_list = []
+        if isinstance(payload.get('modules'), list):
+            modules_list.extend(payload['modules'])
+        if isinstance(payload.get('extra_params'), dict) and isinstance(payload['extra_params'].get('modules'), list):
+            modules_list.extend(payload['extra_params']['modules'])
+        if isinstance(payload.get('data'), dict):
+            if isinstance(payload['data'].get('modules'), list):
+                modules_list.extend(payload['data']['modules'])
+            elif isinstance(payload['data'].get('extra_params'), dict) and isinstance(payload['data']['extra_params'].get('modules'), list):
+                modules_list.extend(payload['data']['extra_params']['modules'])
+
+        # Handle single-module webhook payload if measurements are directly on payload or extra_params
+        if not modules_list:
+            candidate = None
+            if isinstance(payload.get('extra_params'), dict) and (payload['extra_params'].get('id') or payload.get('module_id') or device_id):
+                candidate = dict(payload['extra_params'])
+                if 'id' not in candidate:
+                    candidate['id'] = payload.get('module_id') or device_id
+            elif payload.get('module_id') or device_id:
+                sensor_keys = {
+                    'temperature', 'co2', 'humidity', 'noise', 'pressure', 'AbsolutePressure',
+                    'rain', 'sum_rain_1', 'sum_rain_24', 'wind_strength', 'wind_angle',
+                    'gust_strength', 'gust_angle', 'wind_gust', 'wind_gust_angle', 'reachable',
+                    'rf_strength', 'wifi_strength', 'battery_state', 'battery_level'
+                }
+                if any(k in payload for k in sensor_keys):
+                    candidate = dict(payload)
+                    candidate['id'] = payload.get('module_id') or device_id
+            if candidate:
+                modules_list.append(candidate)
+
+        updated_inline = False
+        for mod in modules_list:
+            if not isinstance(mod, dict):
+                continue
+            mod_id = mod.get('id') or mod.get('_id') or mod.get('module_id')
+            if not mod_id:
+                continue
+            resolved_home, raw_type = self._resolve_home_and_type(mod_id, home_id, mod.get('type'))
+            if not resolved_home:
+                continue
+            mod_type = self.module_type(raw_type)
+            if not mod_type:
+                continue
+            self._ensure_instant_home(resolved_home)
+            existing = dict(self.instant_data[resolved_home][mod_type].get(mod_id, {}))
+            if isinstance(mod.get('dashboard_data'), dict):
+                existing.update(mod['dashboard_data'])
+            existing.update(mod)
+            if 'ts' not in mod and 'last_seen' not in mod and 'time_utc' not in mod:
+                existing['ts'] = event_ts
+            elif 'ts' not in existing:
+                existing['ts'] = existing.get('last_seen') or existing.get('time_utc') or event_ts
+            if 'reachable' not in existing:
+                existing['reachable'] = True
+            self.instant_data[resolved_home][mod_type][mod_id] = existing
+            updated_homes.add(resolved_home)
+            updated_inline = True
+
+        if updated_inline:
+            for h_id in updated_homes:
+                self.merge_data(h_id)
+            return updated_homes
+
+        # If webhook notification did not include inline module measurements (e.g. topology_changed or trigger),
+        # refresh instant status for the affected home(s).
+        if not home_id and device_id:
+            home_id, _ = self._resolve_home_and_type(device_id)
+        if home_id:
+            self.update_weather_info_instant(home_id)
+            updated_homes.add(home_id)
+        elif hasattr(self, 'weather_in_homes') and self.weather_in_homes:
+            for h_id in self.weather_in_homes:
+                self.update_weather_info_instant(h_id)
+                updated_homes.add(h_id)
+
+        return updated_homes
+
     def merge_data_str(self, data):
         '''merge_data_str'''
-        #logging.debug('merge_data_str: {}'.format(data))
-        if data == 'ts':
+        if data in ('ts', 'time_utc', 'last_seen'):
             data_str = 'time_stamp'
-        if data == 'time_utc':
-            data_str = 'time_stamp'               
         elif data == 'AbsolutePressure':
             data_str = 'absolute_pressure'
         elif data == 'reachable':
             data_str = 'online'
+        elif data == 'wind_strength':
+            data_str = 'windstrength'
+        elif data == 'wind_angle':
+            data_str = 'windangle'
+        elif data in ('gust_strength', 'wind_gust'):
+            data_str = 'guststrength'
+        elif data in ('gust_angle', 'wind_gust_angle'):
+            data_str = 'gustangle'
         else:
             data_str = data.lower()
-        return(data_str)
-
+        return data_str
 
     def merge_data(self, home_id):
         '''Merges/combines cloud data and instant data '''
-        cloud_mod_adr_data = {}
-        inst_mod_adr_data = {}
-        
         try:
             logging.debug('merge_data')
-            instant_data = self.instant_data != {}
-            cloud_data = self.cloud_data != {}
-            #logging.debug('merge_data data {}  {}'.format(self.instant_data, self.cloud_data ))
-            if cloud_data and instant_data:
-                for module_type in self.cloud_data[home_id]:
-                    for module_adr in self.cloud_data[home_id][module_type]:
-                        #logging.debug('Inner for loop {} {} {}'.format(home_id,module_type, module_adr))
-                        
-                        if home_id not in self.weather_data:
-                            self.weather_data[home_id] = {}    
-                        if module_type not in self.weather_data[home_id]:
-                            self.weather_data[home_id][module_type]= {}
-                        if module_adr not in self.weather_data[home_id][module_type]:
-                            self.weather_data[home_id][module_type][module_adr]= {}
+            has_instant = home_id in self.instant_data and bool(self.instant_data[home_id])
+            has_cloud = home_id in self.cloud_data and bool(self.cloud_data[home_id])
+            if not has_instant and not has_cloud:
+                return
 
-                        # data exists so data must exist for weather_data
-                        cloud_mod_adr_data = self.cloud_data[home_id][module_type][module_adr]
-                        if home_id in self.instant_data:
-                            if module_type in self.instant_data[home_id]:
-                                if module_adr in self.instant_data[home_id][module_type]:
-                                    inst_mod_adr_data = self.instant_data[home_id][module_type][module_adr]
-                                else:
-                                    #logging.debug(' inst data has no {}'.format(module_adr))
-                                    inst_mod_adr_data = {}
-                            else:
-                                inst_mod_adr_data = {}
-                                #logging.debug(' inst data has no {}'.format(module_type))
+            if home_id not in self.weather_data:
+                self.weather_data[home_id] = {}
+
+            module_types = set()
+            if has_cloud:
+                module_types.update(self.cloud_data[home_id].keys())
+            if has_instant:
+                module_types.update(self.instant_data[home_id].keys())
+
+            for module_type in module_types:
+                if not module_type:
+                    continue
+                if module_type not in self.weather_data[home_id]:
+                    self.weather_data[home_id][module_type] = {}
+
+                module_adrs = set()
+                if has_cloud and module_type in self.cloud_data[home_id]:
+                    module_adrs.update(self.cloud_data[home_id][module_type].keys())
+                if has_instant and module_type in self.instant_data[home_id]:
+                    module_adrs.update(self.instant_data[home_id][module_type].keys())
+
+                for module_adr in module_adrs:
+                    if module_adr not in self.weather_data[home_id][module_type]:
+                        self.weather_data[home_id][module_type][module_adr] = {}
+
+                    cloud_mod_adr_data = (
+                        self.cloud_data[home_id].get(module_type, {}).get(module_adr, {})
+                        if has_cloud else {}
+                    )
+                    inst_mod_adr_data = (
+                        self.instant_data[home_id].get(module_type, {}).get(module_adr, {})
+                        if has_instant else {}
+                    )
+
+                    cloud_ts = cloud_mod_adr_data.get('time_utc') or cloud_mod_adr_data.get('ts')
+                    inst_ts = inst_mod_adr_data.get('ts') or inst_mod_adr_data.get('last_seen') or inst_mod_adr_data.get('time_utc')
+                    cloud_ok = bool(cloud_mod_adr_data)
+                    inst_ok = bool(inst_mod_adr_data)
+
+                    if cloud_ok and inst_ok:
+                        logging.debug('both cloud and instant')
+                        if cloud_ts is not None and inst_ts is not None and cloud_ts > inst_ts:
+                            first_src, second_src = inst_mod_adr_data, cloud_mod_adr_data
                         else:
-                            inst_mod_adr_data = {}
-                            #logging.debug(' inst data has no {}'.format(home_id))
-                        #logging.debug('inst {} cloud {}'.format(inst_mod_adr_data, cloud_mod_adr_data))
-                        cloud_ok =  'time_utc' in cloud_mod_adr_data
-                        inst_ok = 'ts' in inst_mod_adr_data 
-                        if cloud_ok and inst_ok:
-                            logging.debug('both cloud and instant')
-                            if cloud_mod_adr_data['time_utc'] > inst_mod_adr_data ['ts']:
-                                for data in inst_mod_adr_data:
-                                    #logging.debug('for loop inst {} {} {}'.format(data, inst_mod_adr_data, self.weather_data))
-                                    data_str = self.merge_data_str(data)
-                                    self.weather_data[home_id][module_type][module_adr][data_str] =inst_mod_adr_data[data]
-                                for data in cloud_mod_adr_data:
-                                    #logging.debug('for loop cloud {} {} {}'.format(data, cloud_mod_adr_data, self.weather_data))
-                                    data_str = self.merge_data_str(data)                               
-                                    self.weather_data[home_id][module_type][module_adr][data_str] =cloud_mod_adr_data[data]
-                            else:
-                                for data in cloud_mod_adr_data:
-                                    #logging.debug('for loop cloud {}'.format(data))
-                                    data_str = self.merge_data_str(data)                            
-                                    self.weather_data[home_id][module_type][module_adr][data_str] =cloud_mod_adr_data[data]
-                                for data in inst_mod_adr_data:
-                                    #logging.debug('for loop inst {}'.format(data))
-                                    data_str = self.merge_data_str(data)
-                                    self.weather_data[home_id][module_type][module_adr][data_str] =inst_mod_adr_data[data]
-                        elif cloud_ok:
-                            for data in cloud_mod_adr_data:
-                                #logging.debug('for loop cloud only {} weather{}  cloud{}'.format(data, self.weather_data, cloud_mod_adr_data))
-                                data_str = self.merge_data_str(data)                               
-                                self.weather_data[home_id][module_type][module_adr][data_str] =cloud_mod_adr_data[data]
-                        elif inst_ok:
-                            for data in inst_mod_adr_data:
-                                #logging.debug('for loop inst only {} weather{}  inst{}'.format(data, self.weather_data, inst_mod_adr_data))
-                                data_str = self.merge_data_str(data)
-                                self.weather_data[home_id][module_type][module_adr][data_str] =inst_mod_adr_data[data]                            
-            elif cloud_data: # instant_data must be False
-                logging.debug('cloud only')
-                #logging.debug(self.cloud_data[home_id])
-                for module_type in self.cloud_data[home_id]:
-                    #logging.debug(module_type)
-                    for module_adr in self.cloud_data[home_id][module_type]:
-                        #logging.debug(module_adr)
-                        #logging.debug(self.weather_data)
-                        if home_id not in self.weather_data:
-                            self.weather_data[home_id] = {}
-                            
-                        if module_type not in self.weather_data[home_id]:
-                            self.weather_data[home_id][module_type]= {}
-                        if module_adr not in self.weather_data[home_id][module_type]:
-                            self.weather_data[home_id][module_type][module_adr]= {}
-                                # check who has leastes data - process older first
-                        #logging.debug(self.cloud_data[home_id])
-                        #logging.debug(self.cloud_data[home_id][module_type])
-                        #logging.debug(self.cloud_data[home_id][module_type][module_adr])
-                        #logging.debug(self.cloud_data)
-                        cloud_mod_adr_data = self.cloud_data[home_id][module_type][module_adr]
-                        #logging.debug(cloud_mod_adr_data)
-                        #logging.debug('data type {}'.format( type (cloud_mod_adr_data )))
-                        for dat in cloud_mod_adr_data:
-                            #logging.debug('for loop cloud only ONLY {}'.format(dat))
-                            data_str = self.merge_data_str(dat)
-                            self.weather_data[home_id][module_type][module_adr][data_str] = cloud_mod_adr_data[dat]
-
-            else: # cloud_data must be False
-                logging.debug('inst  only')
-                for module_type in self.instant_data[home_id]:
-                    for module_adr in self.instant_data[home_id][module_type]:
-                        if home_id not in self.weather_data:
-                            self.weather_data[home_id] = {}       
-                        if module_type not in self.weather_data[home_id]:
-                            self.weather_data[home_id][module_type]= {}
-                        if module_adr not in self.weather_data[home_id][module_type]:
-                            self.weather_data[home_id][module_type][module_adr]= {}
-                                # check who has leastes data - process older first
-                        inst_mod_adr_data = self.instant_data[home_id][module_type][module_adr]
-                        for data in inst_mod_adr_data:
-                            #logging.debug('for loop inst only ONLY { }'.format(data))
+                            first_src, second_src = cloud_mod_adr_data, inst_mod_adr_data
+                        for data in first_src:
                             data_str = self.merge_data_str(data)
-                            self.weather_data[home_id][module_type][module_adr][data_str] =inst_mod_adr_data[data]
+                            self.weather_data[home_id][module_type][module_adr][data_str] = first_src[data]
+                        for data in second_src:
+                            data_str = self.merge_data_str(data)
+                            self.weather_data[home_id][module_type][module_adr][data_str] = second_src[data]
+                    elif cloud_ok:
+                        for data in cloud_mod_adr_data:
+                            data_str = self.merge_data_str(data)
+                            self.weather_data[home_id][module_type][module_adr][data_str] = cloud_mod_adr_data[data]
+                    elif inst_ok:
+                        for data in inst_mod_adr_data:
+                            data_str = self.merge_data_str(data)
+                            self.weather_data[home_id][module_type][module_adr][data_str] = inst_mod_adr_data[data]
             logging.debug('merge_data complete {}'.format(self.weather_data))
         except Exception as E:
-            logging.error('Exception merging data: {} - {}: {} {}'.format(E, self.weather_data, self.instant_data,self.cloud_data  ))
+            logging.error('Exception merging data: {} - {}: {} {}'.format(E, self.weather_data, self.instant_data, self.cloud_data))
             
     def get_homes(self):
         '''get_homes'''
@@ -418,10 +498,16 @@ class NetatmoWeather (NetatmoCloud):
             return(None)        
              
     def get_time_since_time_stamp_min(self, module):
-        unix_timestamp = datetime.now(timezone.utc).timestamp()
-        meas_time = self.get_time_stamp(module)        
-        delay = unix_timestamp - meas_time
-        return( round(delay/60, 2)) #delay min
+        try:
+            unix_timestamp = datetime.now(timezone.utc).timestamp()
+            meas_time = self.get_time_stamp(module)
+            if meas_time is None:
+                return 0
+            delay = max(0, unix_timestamp - meas_time)
+            return round(delay / 60, 2)  # delay min
+        except Exception as e:
+            logging.error('get_time_since_time_stamp_min exception: {}'.format(e))
+            return 0
 
     def get_temp_trend(self, module):
         try:
@@ -514,29 +600,31 @@ class NetatmoWeather (NetatmoCloud):
 
     def get_battery_info(self, module):
         try:
-            bat1 = self.weather_data[module['home_id']][module['type']][module['module_id']]['battery_state']
-            bat2 = self.weather_data[module['home_id']][module['type']][module['module_id']]['battery_level']
+            mod_data = self.weather_data.get(module['home_id'], {}).get(module['type'], {}).get(module['module_id'], {})
+            bat1 = mod_data.get('battery_state')
+            bat2 = mod_data.get('battery_level')
             return (bat1, bat2)
         except Exception as e:
             logging.error('get_battery_info exception: {}'.format(e))
-            return( None, None)
+            return (None, None)
         
     def get_rf_info(self, module):
         try:
             rf1 = None
             rf2 = None
-            if 'rf_state' in self.weather_data[module['home_id']][module['type']][module['module_id']]:
-                rf1 = self.weather_data[module['home_id']][module['type']][module['module_id']]['rf_state']               
-            if 'wifi_state' in self.weather_data[module['home_id']][module['type']][module['module_id']]:
-                rf1 = self.weather_data[module['home_id']][module['type']][module['module_id']]['wifi_state']
-            if 'rf_strength' in self.weather_data[module['home_id']][module['type']][module['module_id']]:
-                rf2 = -self.weather_data[module['home_id']][module['type']][module['module_id']]['rf_strength']
-            if 'wifi_strength' in self.weather_data[module['home_id']][module['type']][module['module_id']]:
-                rf2 = -self.weather_data[module['home_id']][module['type']][module['module_id']]['wifi_strength']           
-            return(rf1, rf2)
+            mod_data = self.weather_data.get(module['home_id'], {}).get(module['type'], {}).get(module['module_id'], {})
+            if 'rf_state' in mod_data:
+                rf1 = mod_data['rf_state']
+            if 'wifi_state' in mod_data:
+                rf1 = mod_data['wifi_state']
+            if 'rf_strength' in mod_data and mod_data['rf_strength'] is not None:
+                rf2 = -abs(mod_data['rf_strength'])
+            if 'wifi_strength' in mod_data and mod_data['wifi_strength'] is not None:
+                rf2 = -abs(mod_data['wifi_strength'])
+            return (rf1, rf2)
         except Exception as e:
             logging.error('get_rf_info exception; {}'.format(e))
-            return(None, None)
+            return (None, None)
 
     def get_online(self, module):
         try:

@@ -76,4 +76,12 @@
         <range uom="25" subset="0,99" nls="error" />
     </editor>
 
+    <editor id="STREAMSYNC">
+        <range uom="25" subset="0,1,98,99" nls="STREAMSYNC" />
+    </editor>
+
+    <editor id="TESTCON">
+        <range uom="25" subset="0-4,98,99" nls="TEST" />
+    </editor>
+
 </editors>

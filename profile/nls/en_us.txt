@@ -2,7 +2,10 @@
 ND-controller-NAME = Netatmo System
 ND-controller-ICON = Weather
 ST-ctrl-ST-NAME = NodeServer Online
-CMD-ctrl-UPDATE-NAME = Force Update 
+ST-ctrl-GV29-NAME = Connection Status
+ST-ctrl-GV30-NAME = Webhook Test
+CMD-ctrl-UPDATE-NAME = Force Update
+CMD-ctrl-TESTCON-NAME = Test Connection
 
 ND-mainunit-NAME = Main Weather Station
 ND-mainunit-ICON = Weather
@@ -93,3 +96,17 @@ rf_status-0 = Strong
 rf_status-1 = Medium
 rf_status-2 = Low
 rf_status-99 = Unknown
+
+STREAMSYNC-0 = Disconnected
+STREAMSYNC-1 = Connected
+STREAMSYNC-98 = Error
+STREAMSYNC-99 = Unknown
+
+TEST-0 = Idle
+TEST-1 = Testing...
+TEST-2 = Success
+TEST-3 = Timeout
+TEST-4 = Failure
+TEST-98 = Error
+TEST-99 = Unknown
+

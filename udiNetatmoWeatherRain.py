@@ -112,17 +112,18 @@ class udiN_WeatherRain(udi_interface.Node):
 
 
     def rfstate2ISY(self, rf_state):
-        if rf_state.lower() == 'full' or rf_state.lower() == 'high':
+        if not rf_state or not isinstance(rf_state, str):
+            return 99
+        if rf_state.lower() in ('full', 'high'):
             rf = 0
         elif rf_state.lower() == 'medium':
             rf = 1
         elif rf_state.lower() == 'low':
             rf = 2
         else:
-            rf= 99
+            rf = 99
             logging.error('Unsupported RF state {}'.format(rf_state))
-        return(rf)
-    
+        return rf
 
     def battery2ISY(self, batlvl):
         if batlvl == 'max':
@@ -139,20 +140,18 @@ class udiN_WeatherRain(udi_interface.Node):
             state = 5
         else:
             state = 99
-        return(state)
-    
+        return state
 
-    def trend2ISY (self, trend):
+    def trend2ISY(self, trend):
         if trend == 'stable':
-            return(0)
+            return 0
         elif trend == 'up':
-            return(1)
-        elif trend =='down':
-            return(2)
+            return 1
+        elif trend == 'down':
+            return 2
         else:
-            logging.error('unsupported temperature trend: {}'.format(trend))
-            return(99)    
-        
+            return 99
+
     def updateISYdrivers(self):
         logging.debug('updateISYdrivers')
         data = self.weather.get_module_data(self.module)
@@ -160,18 +159,23 @@ class udiN_WeatherRain(udi_interface.Node):
         if self.node is not None:
             if self.weather.get_online(self.module):
                 self.node.setDriver('ST', 1)
-              
-                self.node.setDriver('GV0', self.weather.get_rain(self.module), True, False, 82)
-                self.node.setDriver('GV1', self.weather.get_rain_1hour(self.module), True, False, 82)
-                self.node.setDriver('GV2', self.weather.get_rain_24hours(self.module), True, False, 82)
 
-                self.node.setDriver('GV3', self.weather.get_time_since_time_stamp_min(self.module) , True, False, 44)
-                
-                bat_state, bat_lvl  = self.weather.get_battery_info(self.module)    
-                self.node.setDriver('GV4', self.battery2ISY(bat_state), True, False, 25 )     
-                rf1, rf2 = self.weather.get_rf_info(self.module) 
-                self.node.setDriver('GV5', self.rfstate2ISY(rf1) )
-                #self.node.setDriver('ERR', 0)
+                rain = self.weather.get_rain(self.module)
+                if rain is not None:
+                    self.node.setDriver('GV0', rain, True, False, 82)
+                rain_1h = self.weather.get_rain_1hour(self.module)
+                if rain_1h is not None:
+                    self.node.setDriver('GV1', rain_1h, True, False, 82)
+                rain_24h = self.weather.get_rain_24hours(self.module)
+                if rain_24h is not None:
+                    self.node.setDriver('GV2', rain_24h, True, False, 82)
+
+                self.node.setDriver('GV3', self.weather.get_time_since_time_stamp_min(self.module), True, False, 44)
+
+                bat_state, bat_lvl = self.weather.get_battery_info(self.module)
+                self.node.setDriver('GV4', self.battery2ISY(bat_state), True, False, 25)
+                rf1, rf2 = self.weather.get_rf_info(self.module)
+                self.node.setDriver('GV5', self.rfstate2ISY(rf1))
             else:
                 self.node.setDriver('GV0', 99, True, False, 25 )
                 self.node.setDriver('GV1', 99, True, False, 25 )
