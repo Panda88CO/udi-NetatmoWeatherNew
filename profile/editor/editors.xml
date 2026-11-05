@@ -42,6 +42,11 @@
         <range uom="25" subset="0,99" nls="error" />
     </editor>
 
+    <editor id="unixtime">
+        <range uom="151" min="0" max="2147483647" prec="0" />
+        <range uom="25" subset="0,99" nls="error" />
+    </editor>
+
 
     <editor id="percent">
         <range uom="51" min="0" max="100" prec="0" />

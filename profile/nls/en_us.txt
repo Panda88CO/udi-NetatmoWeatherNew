@@ -2,6 +2,7 @@
 ND-controller-NAME = Netatmo System
 ND-controller-ICON = Weather
 ST-ctrl-ST-NAME = NodeServer Online
+ST-ctrl-GV28-NAME = Last Update
 ST-ctrl-GV29-NAME = Connection Status
 ST-ctrl-GV30-NAME = Webhook Test
 CMD-ctrl-UPDATE-NAME = Force Update
@@ -22,6 +23,7 @@ ST-MAIN-GV8-NAME = Temperature Trend
 # ST-MAIN-GV9-NAME = Pressure Trend
 ST-MAIN-GV10-NAME = Time since measurement
 ST-MAIN-GV11-NAME = Wi-Fi Status
+ST-MAIN-GV12-NAME = Last Update
 CMD-MAIN-UPDATE-NAME = Force Update 
 
 ND-indoor-NAME = Indoor Module
@@ -36,6 +38,7 @@ ST-INDM-GV5-NAME = Temperature Trend
 ST-INDM-GV6-NAME = Time since measurement
 ST-INDM-GV7-NAME = Battery
 ST-INDM-GV8-NAME = RF Status
+ST-INDM-GV9-NAME = Last Update
 CMD-INDM-UPDATE-NAME = Force Update 
 
 ND-outdoor-NAME = Outdoor Module
@@ -49,6 +52,7 @@ ST-OUTM-GV4-NAME = Temperature Trend
 ST-OUTM-GV5-NAME = Time since measurement
 ST-OUTM-GV6-NAME = Battery
 ST-OUTM-GV7-NAME = RF Status
+ST-OUTM-GV8-NAME = Last Update
 CMD-OUTM-UPDATE-NAME = Force Update 
 
 ND-wind-NAME = Wind Module
@@ -63,6 +67,7 @@ ST-WINM-GV5-NAME = Max Wind Angle
 ST-WINM-GV6-NAME = Time since measurement
 ST-WINM-GV7-NAME = Battery
 ST-WINM-GV8-NAME = RF Status
+ST-WINM-GV9-NAME = Last Update
 CMD-WINM-UPDATE-NAME = Force Update 
 
 ND-rain-NAME = Rain Module
@@ -74,6 +79,7 @@ ST-RAIM-GV2-NAME = Sum Rain 24h
 ST-RAIM-GV3-NAME = Time since measurement
 ST-RAIM-GV4-NAME = Battery
 ST-RAIM-GV5-NAME = RF Status
+ST-RAIM-GV6-NAME = Last Update
 CMD-RAIM-UPDATE-NAME = Force Update 
 
 EN_TREND-0 = Stable

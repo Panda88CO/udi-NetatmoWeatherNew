@@ -62,7 +62,8 @@ class udiN_WeatherIndoor(udi_interface.Node):
             {'driver' : 'GV5', 'value': 99,  'uom':25}, 
             {'driver' : 'GV6', 'value': 0,  'uom':44}, 
             {'driver' : 'GV7', 'value': 99,  'uom':25}, 
-            {'driver' : 'GV8', 'value': 99,  'uom':25},          
+            {'driver' : 'GV8', 'value': 99,  'uom':25},
+            {'driver' : 'GV9', 'value': 99,  'uom':25},
             {'driver' : 'ST', 'value': 0,  'uom':2}, 
             ]
 
@@ -136,7 +137,7 @@ class udiN_WeatherIndoor(udi_interface.Node):
             state = 3
         elif batlvl == 'low':
             state = 4
-        elif batlvl == 'very low':
+        elif batlvl in ('very low', 'very_low'):
             state = 5
         else:
             state = 99
@@ -194,7 +195,10 @@ class udiN_WeatherIndoor(udi_interface.Node):
                 bat_state, bat_lvl = self.weather.get_battery_info(self.module)
                 self.node.setDriver('GV7', self.battery2ISY(bat_state), True, False, 25)
                 rf1, rf2 = self.weather.get_rf_info(self.module)
-                self.node.setDriver('GV8', self.rfstate2ISY(rf1), True, False, 25)                     
+                self.node.setDriver('GV8', self.rfstate2ISY(rf1), True, False, 25)
+                ts = self.weather.get_time_stamp(self.module)
+                if ts is not None:
+                    self.node.setDriver('GV9', int(ts), True, False, 151)
 
             else:
                 self.node.setDriver('CLITEMP', 99, True, False, 25 )
@@ -206,6 +210,7 @@ class udiN_WeatherIndoor(udi_interface.Node):
                 self.node.setDriver('GV6', 99, True, False, 25 )
                 self.node.setDriver('GV7', 99, True, False, 25 )
                 self.node.setDriver('GV8', 99, True, False, 25 )
+                self.node.setDriver('GV9', 99, True, False, 25 )
                 self.node.setDriver('ST', 0) 
                 #self.node.setDriver('ERR', 1)                     
 

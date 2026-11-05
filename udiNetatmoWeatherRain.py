@@ -52,6 +52,7 @@ class udiN_WeatherRain(udi_interface.Node):
             {'driver' : 'GV3', 'value': 0,  'uom':44}, 
             {'driver' : 'GV4', 'value': 99,  'uom':25}, 
             {'driver' : 'GV5', 'value': 99,  'uom':25}, 
+            {'driver' : 'GV6', 'value': 99,  'uom':25},
           
             {'driver' : 'ST', 'value': 0,  'uom':2}, 
             ]
@@ -134,7 +135,7 @@ class udiN_WeatherRain(udi_interface.Node):
             state = 3
         elif batlvl == 'low':
             state = 4
-        elif batlvl == 'very low':
+        elif batlvl in ('very low', 'very_low'):
             state = 5
         else:
             state = 99
@@ -174,6 +175,9 @@ class udiN_WeatherRain(udi_interface.Node):
                 self.node.setDriver('GV4', self.battery2ISY(bat_state), True, False, 25)
                 rf1, rf2 = self.weather.get_rf_info(self.module)
                 self.node.setDriver('GV5', self.rfstate2ISY(rf1))
+                ts = self.weather.get_time_stamp(self.module)
+                if ts is not None:
+                    self.node.setDriver('GV6', int(ts), True, False, 151)
             else:
                 self.node.setDriver('GV0', 99, True, False, 25 )
                 self.node.setDriver('GV1', 99, True, False, 25 )
@@ -181,6 +185,7 @@ class udiN_WeatherRain(udi_interface.Node):
                 self.node.setDriver('GV3', 99, True, False, 25 )
                 self.node.setDriver('GV4', 99, True, False, 25 )
                 self.node.setDriver('GV5', 99, True, False, 25 )
+                self.node.setDriver('GV6', 99, True, False, 25 )
                 self.node.setDriver('ST', 0)
                 #self.node.setDriver('ERR', 1)
 

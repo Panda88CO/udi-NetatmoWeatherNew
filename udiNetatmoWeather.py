@@ -155,6 +155,7 @@ class NetatmoController(udi_interface.Node):
         self.node.setDriver('GV29', 1, True, True)
         updated_homes = self.myNetatmo.process_webhook_data(payload)
         if self.nodeDefineDone and updated_homes:
+            self.node.setDriver('GV28', int(time.time()), True, True, 151)
             nodes = self.poly.nodes()
             for nde in nodes:
                 if nde.address != 'controller':
@@ -300,6 +301,7 @@ class NetatmoController(udi_interface.Node):
                         self.homes_list.append(tmp_module['home'])
                         self.myNetatmo.update_weather_info_cloud(home)
                         self.myNetatmo.update_weather_info_instant(home)
+                        self.node.setDriver('GV28', int(time.time()), True, True, 151)
 
                     logging.debug('Names: {}, Addresses {} info {}'.format(node_name, node_address, tmp_module))
                     udiNetatmoWeatherMain(self.poly, node_address, node_address, node_name, self.myNetatmo, tmp_module)
@@ -358,8 +360,9 @@ class NetatmoController(udi_interface.Node):
                             self.node.setDriver('GV29', 1, True, True)
                     for home in self.homes_list:
                         self.myNetatmo.update_weather_info_cloud(home)
-                        if not self.webhook_registered:
-                            self.myNetatmo.update_weather_info_instant(home)
+                        self.myNetatmo.update_weather_info_instant(home)
+                    if self.homes_list:
+                        self.node.setDriver('GV28', int(time.time()), True, True, 151)
 
                     for nde in nodes:
                         if nde.address != 'controller':  # but not the setup node
@@ -368,10 +371,10 @@ class NetatmoController(udi_interface.Node):
 
                 if 'shortPoll' in polltype:
                     self.heartbeat()
-                    # Real-time updates arrive via Netatmo webhooks; only poll /homestatus as fallback if webhook is not active
-                    if not self.webhook_registered:
-                        for home in self.homes_list:
-                            self.myNetatmo.update_weather_info_instant(home)
+                    for home in self.homes_list:
+                        self.myNetatmo.update_weather_info_instant(home)
+                    if self.homes_list:
+                        self.node.setDriver('GV28', int(time.time()), True, True, 151)
                     for nde in nodes:
                         if nde.address != 'controller':  # but not the setup node
                             logging.debug('updating node {} data'.format(nde))
@@ -404,6 +407,8 @@ class NetatmoController(udi_interface.Node):
                 for home in self.homes_list:
                     self.myNetatmo.update_weather_info_cloud(home)
                     self.myNetatmo.update_weather_info_instant(home)
+                if self.homes_list:
+                    self.node.setDriver('GV28', int(time.time()), True, True, 151)
                 for nde in nodes:
                     if nde.address != 'controller':  # but not the setup node
                         logging.debug('updating node {} data'.format(nde))
@@ -414,6 +419,7 @@ class NetatmoController(udi_interface.Node):
     id = 'controller'
     drivers = [
         {'driver': 'ST', 'value': 0, 'uom': 2},
+        {'driver': 'GV28', 'value': 99, 'uom': 25},
         {'driver': 'GV29', 'value': 99, 'uom': 25},
         {'driver': 'GV30', 'value': 99, 'uom': 25},
     ]

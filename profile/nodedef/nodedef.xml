@@ -3,6 +3,7 @@
     <editors />
     <sts>
       <st id="ST" editor="bool" />
+      <st id="GV28" editor="unixtime" />
       <st id="GV29" editor="STREAMSYNC" />
       <st id="GV30" editor="TESTCON" />
     </sts>
@@ -33,6 +34,7 @@
       <!--<st id="GV9" editor="trend" /> -->
       <st id="GV10" editor="t_timestamp" />
       <st id="GV11" editor="rf_status" />
+      <st id="GV12" editor="unixtime" />
     </sts>
     <cmds>
       <sends />
@@ -54,6 +56,7 @@
       <st id="GV6" editor="t_timestamp" />
       <st id="GV7" editor="battery" />
       <st id="GV8" editor="rf_status" />
+      <st id="GV9" editor="unixtime" />
     </sts>
     <cmds>
       <sends />
@@ -74,6 +77,7 @@
       <st id="GV5" editor="t_timestamp" />
       <st id="GV6" editor="battery" />
       <st id="GV7" editor="rf_status" />
+      <st id="GV8" editor="unixtime" />
     </sts>
     <cmds>
       <sends />
@@ -95,6 +99,7 @@
       <st id="GV6" editor="t_timestamp" />
       <st id="GV7" editor="battery" />
       <st id="GV8" editor="rf_status" />
+      <st id="GV9" editor="unixtime" />
     </sts>
     <cmds>
       <sends />
@@ -113,6 +118,7 @@
       <st id="GV3" editor="t_timestamp" />
       <st id="GV4" editor="battery" />
       <st id="GV5" editor="rf_status" />
+      <st id="GV6" editor="unixtime" />
     </sts>
     <cmds>
       <sends />
