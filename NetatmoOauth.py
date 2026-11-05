@@ -126,6 +126,12 @@ class NetatmoCloud(OAuth):
         invalid_client_secrets = {'', 'enter client_secret', 'enter clientsecret', 'client_secret', 'clientsecret'}
 
         client_id_val = userParams.get('clientID') if 'clientID' in userParams else userParams.get('ClientID')
+        if client_id_val is None:
+            client_id_val = (
+                self.customParameters['clientID']
+                if 'clientID' in self.customParameters
+                else (self.customParameters['ClientID'] if 'ClientID' in self.customParameters else None)
+            )
         if client_id_val is not None:
             cleaned_id = str(client_id_val).strip()
             if cleaned_id.lower() not in invalid_client_ids and not cleaned_id.lower().startswith('enter '):
@@ -133,10 +139,11 @@ class NetatmoCloud(OAuth):
                 oauthSettingsUpdate['client_id'] = cleaned_id
                 client_ok = True
             else:
+                logging.warning(f'clientID is still set to placeholder ({cleaned_id!r}); please enter a valid clientID')
                 self.client_ID = None
         else:
             logging.warning('No clientID found')
-            self.customParameters['clientID'] = 'enter client_id'
+            self.customParameters['clientID'] = 'Enter clientID'
             self.client_ID = None
 
         client_secret_val = (
@@ -157,10 +164,11 @@ class NetatmoCloud(OAuth):
                 oauthSettingsUpdate['client_secret'] = cleaned_secret
                 secret_ok = True
             else:
+                logging.warning('clientSecret is still set to placeholder; please enter a valid clientSecret')
                 self.client_SECRET = None
         else:
             logging.warning('No clientSecret found')
-            self.customParameters['clientSecret'] = 'enter client_secret'
+            self.customParameters['clientSecret'] = 'Enter clientSecret'
             self.client_SECRET = None
 
         if not client_ok or not secret_ok:
@@ -173,17 +181,16 @@ class NetatmoCloud(OAuth):
             self.temp_unit = 'C'
             self.customParameters['TEMP_UNIT'] = 'C'
 
-        default_webhook_url = self.get_portal_webhook_url()
-        if 'WEBHOOK_URL' not in self.customParameters or not self.customParameters['WEBHOOK_URL']:
-            if default_webhook_url:
-                self.customParameters['WEBHOOK_URL'] = default_webhook_url
-
         oauthSettingsUpdate['scope'] = self.scope
         oauthSettingsUpdate['auth_endpoint'] = 'https://api.netatmo.com/oauth2/authorize'
         oauthSettingsUpdate['token_endpoint'] = 'https://api.netatmo.com/oauth2/token'
         oauthSettingsUpdate['addRedirect'] = True
         self.updateOauthSettings(oauthSettingsUpdate)
         if client_ok and secret_ok:
+            default_webhook_url = self.get_portal_webhook_url()
+            if 'WEBHOOK_URL' not in self.customParameters or not self.customParameters['WEBHOOK_URL']:
+                if default_webhook_url:
+                    self.customParameters['WEBHOOK_URL'] = default_webhook_url
             self.handleCustomParamsDone = True
             if 'client' in self.poly.Notices:
                 self.poly.Notices.delete('client')

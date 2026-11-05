@@ -201,6 +201,10 @@ class NetatmoController(udi_interface.Node):
 
     def start(self):
         logging.info('Executing start')
+        while not self.configDone:
+            time.sleep(1)
+            logging.debug('Waiting for PG3x CONFIGDONE to complete')
+
         self.init_webhook()
 
         self.poly.Notices['webhook'] = 'Checking webhook connection'
@@ -219,6 +223,9 @@ class NetatmoController(udi_interface.Node):
             self.poly.Notices.delete('webhook')
 
         while not (self.configDone and self.myNetatmo.customParamsDone() and self.myNetatmo.customNsDone()):
+            if self.configDone and not self.myNetatmo.customParamsDone():
+                if 'client' not in self.poly.Notices:
+                    self.poly.Notices['client'] = 'Please enter valid clientID and clientSecret - then restart'
             time.sleep(2)
             logging.debug('Waiting for config to complete {} {} {}'.format(self.configDone, self.myNetatmo.customParamsDone(), self.myNetatmo.customNsDone()))
 
@@ -301,7 +308,8 @@ class NetatmoController(udi_interface.Node):
 
     def configDoneHandler(self):
         # We use this to discover devices, or ask to authenticate if user has not already done so
-        self.poly.Notices.clear()
+        if self.myNetatmo.customParamsDone() and 'client' in self.poly.Notices:
+            self.poly.Notices.delete('client')
         logging.info('configDoneHandler called')
         self.nodes_in_db = self.poly.getNodesFromDb()
         logging.debug('Nodes in Nodeserver - before cleanup: {} - {}'.format(len(self.nodes_in_db), self.nodes_in_db))
@@ -399,9 +407,6 @@ if __name__ == "__main__":
 
         # then you need to create the controller node
         NetatmoController(polyglot, 'controller', 'controller', 'Netatmo Weather')
-
-        # We can start receive events
-        polyglot.ready()
 
         # Just sit and wait for events
         polyglot.runForever()
