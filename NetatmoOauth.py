@@ -89,10 +89,12 @@ class NetatmoCloud(OAuth):
             logging.debug('Waiting for oauthHandler to complete')
             time.sleep(5)
         super().oauthHandler(token)
+        # Brief pause to avoid race condition with Netatmo application-level authorization webhook dispatch
+        time.sleep(2)
         try:
             self.add_webhook()
         except Exception as e:
-            logging.warning(f'Error registering webhook in oauthHandler: {e}')
+            logging.warning(f'[WEBHOOK] Error registering webhook in oauthHandler: {e}')
         logging.debug('oauthHandler Finished')
 
     def customNsDone(self):
@@ -289,7 +291,12 @@ class NetatmoCloud(OAuth):
             logging.error('url is required')
             return None
 
-        completeUrl = self.yourApiEndpoint + url
+        if url.startswith('http://') or url.startswith('https://'):
+            completeUrl = url
+        elif url.startswith('/webhooks/'):
+            completeUrl = 'https://api.netatmo.com' + url
+        else:
+            completeUrl = self.yourApiEndpoint + url
 
         headers = {
             'Authorization': f"Bearer { accessToken }"
@@ -379,18 +386,20 @@ class NetatmoCloud(OAuth):
             "Content-Type": "application/json"
         }
         completeUrl = f"https://my.isy.io/api/eisy/pg3/webhook/noresponse/{uuid}/{slot}"
-        logging.debug(f' Calling { completeUrl } with body: { body }')
+        logging.info(f'[WEBHOOK TEST] Calling { completeUrl } with body: { body }')
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
             try:
                 response = requests.post(completeUrl, headers=headers, json=body, timeout=10)
                 response.raise_for_status()
                 try:
-                    return response.json()
+                    res_data = response.json()
                 except requests.exceptions.JSONDecodeError:
-                    return response.text
+                    res_data = response.text
+                logging.info(f'[WEBHOOK TEST] ISY Portal test response: {res_data}')
+                return res_data
             except requests.exceptions.HTTPError as error:
-                logging.error(f"Call post { completeUrl } failed: { error }")
+                logging.error(f"[WEBHOOK TEST] Call post { completeUrl } failed: { error }")
                 if error.response is not None and error.response.status_code == 503:
                     logging.error('Error 503: The MQTT connection to the IoX for this UUID is not online - check that remote connections is active in the ISY Portal on the PG3 -> Remote Connection page.')
                     logging.error('Make sure this work at https://my.isy.io -> Select Tool | PG3 | Remote connection. It should read "Current status: Connected". Note that it may take up to a minute after switching it on to take effect.')
@@ -398,45 +407,76 @@ class NetatmoCloud(OAuth):
                     logging.error('Error 423: The UUID is not found in your portal account or does not have an active license')
                 if attempt < max_attempts and error.response is not None and error.response.status_code in {429, 500, 502, 503, 504}:
                     delay = 2 * attempt
-                    logging.warning(f"Webhook test HTTP {error.response.status_code} (attempt {attempt}/{max_attempts}); retrying in {delay}s...")
+                    logging.warning(f"[WEBHOOK TEST] Webhook test HTTP {error.response.status_code} (attempt {attempt}/{max_attempts}); retrying in {delay}s...")
                     time.sleep(delay)
                     continue
                 raise error
             except requests.exceptions.RequestException as error:
                 if attempt < max_attempts:
                     delay = 2 * attempt
-                    logging.warning(f"Webhook test request failed ({error}) (attempt {attempt}/{max_attempts}); retrying in {delay}s...")
+                    logging.warning(f"[WEBHOOK TEST] Webhook test request failed ({error}) (attempt {attempt}/{max_attempts}); retrying in {delay}s...")
                     time.sleep(delay)
                     continue
                 raise error
 
+    def get_webhooks(self):
+        logging.info('[WEBHOOK CONFIG] Checking registered webhooks via GET https://api.netatmo.com/webhooks/v1/ ...')
+        res = self._callApi('GET', '/webhooks/v1/')
+        logging.info(f'[WEBHOOK CONFIG] Current Netatmo webhooks: {res}')
+        return res
+
     def add_webhook(self, webhook_url=None):
-        logging.debug('add_webhook called')
         if webhook_url is None:
             webhook_url = self.get_webhook_url()
+        logging.info(f'[WEBHOOK CONFIG] add_webhook called for URL: {webhook_url}')
         if not webhook_url:
-            logging.error('No webhook URL available to register with Netatmo')
+            logging.error('[WEBHOOK CONFIG] No webhook URL available to register with Netatmo')
             return False
-        encoded_url = urllib.parse.quote_plus(webhook_url)
-        res_default = self._callApi('POST', f'/addwebhook?url={encoded_url}')
-        res_station = self._callApi('POST', f'/addwebhook?url={encoded_url}&app_type=app_station')
-        res = res_default if (isinstance(res_default, dict) and res_default.get('status') == 'ok') else res_station
-        if isinstance(res, dict) and res.get('status') == 'ok':
-            logging.info(f'Successfully registered Netatmo webhook: {webhook_url}')
+
+        # Query existing webhooks for diagnostic visibility
+        try:
+            current_webhooks = self.get_webhooks()
+            logging.info(f'[WEBHOOK CONFIG] Existing webhooks before add: {current_webhooks}')
+        except Exception as e:
+            logging.warning(f'[WEBHOOK CONFIG] Could not retrieve existing webhooks: {e}')
+
+        # 1. Try modern Netatmo endpoint (POST /webhooks/v1/ with JSON body {"url": webhook_url})
+        logging.info(f'[WEBHOOK CONFIG] Attempting registration via POST https://api.netatmo.com/webhooks/v1/ ...')
+        res_v1 = self._callApi('POST', '/webhooks/v1/', body={'url': webhook_url})
+        logging.info(f'[WEBHOOK CONFIG] Modern POST /webhooks/v1/ response: {res_v1}')
+        if res_v1 is not None and not (isinstance(res_v1, dict) and (res_v1.get('error') or res_v1.get('status') == 'error')):
+            logging.info(f'[WEBHOOK CONFIG] Successfully registered modern Netatmo webhook: {webhook_url}')
             return True
-        logging.warning(f'Netatmo addwebhook response: default={res_default}, app_station={res_station}')
-        return res is not None
+
+        # 2. Try legacy /api/addwebhook endpoint as fallback
+        encoded_url = urllib.parse.quote_plus(webhook_url)
+        logging.info(f'[WEBHOOK CONFIG] Fallback: Calling legacy POST /api/addwebhook?url={encoded_url}')
+        res_default = self._callApi('POST', f'/addwebhook?url={encoded_url}')
+        logging.info(f'[WEBHOOK CONFIG] Legacy /addwebhook response: {res_default}')
+        if isinstance(res_default, dict) and res_default.get('status') == 'ok':
+            logging.info(f'[WEBHOOK CONFIG] Successfully registered Netatmo webhook via /addwebhook: {webhook_url}')
+            return True
+
+        # 3. Try legacy /api/addwebhook?app_type=app_station as fallback
+        logging.info(f'[WEBHOOK CONFIG] Fallback: Calling legacy POST /api/addwebhook?url={encoded_url}&app_type=app_station')
+        res_station = self._callApi('POST', f'/addwebhook?url={encoded_url}&app_type=app_station')
+        logging.info(f'[WEBHOOK CONFIG] Legacy /addwebhook?app_type=app_station response: {res_station}')
+        if isinstance(res_station, dict) and res_station.get('status') == 'ok':
+            logging.info(f'[WEBHOOK CONFIG] Successfully registered Netatmo webhook via app_station: {webhook_url}')
+            return True
+
+        logging.warning('[WEBHOOK CONFIG] All webhook registration attempts failed or returned unexpected response')
+        return False
 
     def drop_webhook(self):
-        logging.debug('drop_webhook called')
-        res = self._callApi('POST', '/dropwebhook')
-        if res is None:
-            res = self._callApi('POST', '/dropwebhook?app_type=app_station')
-        if isinstance(res, dict) and res.get('status') == 'ok':
-            logging.info('Successfully dropped Netatmo webhook')
-            return True
-        logging.debug(f'Netatmo dropwebhook response: {res}')
-        return False
+        logging.info('[WEBHOOK CONFIG] drop_webhook called')
+        res_v1 = self._callApi('DELETE', '/webhooks/v1/')
+        logging.info(f'[WEBHOOK CONFIG] Modern DELETE /webhooks/v1/ response: {res_v1}')
+        res_legacy = self._callApi('POST', '/dropwebhook')
+        logging.info(f'[WEBHOOK CONFIG] Legacy /dropwebhook response: {res_legacy}')
+        res_station = self._callApi('POST', '/dropwebhook?app_type=app_station')
+        logging.info(f'[WEBHOOK CONFIG] Legacy /dropwebhook?app_type=app_station response: {res_station}')
+        return True
 
     # Then implement your service specific APIs
     '''

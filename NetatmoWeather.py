@@ -162,22 +162,29 @@ class NetatmoWeather (NetatmoCloud):
 
     def process_webhook_data(self, payload):
         '''Processes incoming Netatmo webhook payload and updates instant_data + weather_data'''
-        logging.debug(f'process_webhook_data: {payload}')
+        logging.info(f'[WEBHOOK EVENT] Processing payload: {payload}')
         updated_homes = set()
         if not isinstance(payload, dict):
+            logging.warning(f'[WEBHOOK EVENT] Expected dict payload but received {type(payload)}: {payload}')
             return updated_homes
 
         push_type = payload.get('push_type') or payload.get('event_type')
-        if push_type == 'webhook_activation':
-            logging.info('Netatmo webhook activation confirmed')
-            return updated_homes
-        if push_type == 'webhook_deletion':
-            logging.warning(f'Netatmo webhook deletion received: {payload}')
-            return updated_homes
-
         home_id = payload.get('home_id')
         device_id = payload.get('device_id') or payload.get('id')
+        user_id = payload.get('user_id')
         event_ts = int(payload.get('time_stamp') or payload.get('ts') or payload.get('time_server') or int(time.time()))
+
+        logging.info(
+            f'[WEBHOOK EVENT] Event details: push_type="{push_type}", home_id="{home_id}", '
+            f'device_id="{device_id}", user_id="{user_id}", timestamp={event_ts}'
+        )
+
+        if push_type == 'webhook_activation':
+            logging.info('[WEBHOOK EVENT] Netatmo webhook activation handshake confirmed by Netatmo server!')
+            return updated_homes
+        if push_type == 'webhook_deletion':
+            logging.warning(f'[WEBHOOK EVENT] Netatmo webhook deletion event received from Netatmo: {payload}')
+            return updated_homes
 
         measurement_keys = {
             'temperature', 'co2', 'humidity', 'noise', 'pressure', 'AbsolutePressure',
@@ -189,13 +196,17 @@ class NetatmoWeather (NetatmoCloud):
 
         modules_list = []
         if isinstance(payload.get('modules'), list):
+            logging.debug(f'[WEBHOOK EVENT] Found modules in payload["modules"]: {payload["modules"]}')
             modules_list.extend(payload['modules'])
         if isinstance(payload.get('extra_params'), dict) and isinstance(payload['extra_params'].get('modules'), list):
+            logging.debug(f'[WEBHOOK EVENT] Found modules in payload["extra_params"]["modules"]: {payload["extra_params"]["modules"]}')
             modules_list.extend(payload['extra_params']['modules'])
         if isinstance(payload.get('data'), dict):
             if isinstance(payload['data'].get('modules'), list):
+                logging.debug(f'[WEBHOOK EVENT] Found modules in payload["data"]["modules"]: {payload["data"]["modules"]}')
                 modules_list.extend(payload['data']['modules'])
             elif isinstance(payload['data'].get('extra_params'), dict) and isinstance(payload['data']['extra_params'].get('modules'), list):
+                logging.debug(f'[WEBHOOK EVENT] Found modules in payload["data"]["extra_params"]["modules"]: {payload["data"]["extra_params"]["modules"]}')
                 modules_list.extend(payload['data']['extra_params']['modules'])
 
         # Handle single-module webhook payload if measurements are directly on payload or extra_params
@@ -210,7 +221,10 @@ class NetatmoWeather (NetatmoCloud):
                     candidate = dict(payload)
                     candidate['id'] = payload.get('module_id') or device_id
             if candidate:
+                logging.debug(f'[WEBHOOK EVENT] Found single module candidate in payload: {candidate}')
                 modules_list.append(candidate)
+
+        logging.info(f'[WEBHOOK EVENT] Extracted {len(modules_list)} module item(s) from webhook event')
 
         updated_inline = False
         has_inline_measurements = False
@@ -219,12 +233,15 @@ class NetatmoWeather (NetatmoCloud):
                 continue
             mod_id = mod.get('id') or mod.get('_id') or mod.get('module_id')
             if not mod_id:
+                logging.debug(f'[WEBHOOK EVENT] Skipping module item without id: {mod}')
                 continue
             resolved_home, raw_type = self._resolve_home_and_type(mod_id, home_id, mod.get('type'))
             if not resolved_home:
+                logging.warning(f'[WEBHOOK EVENT] Could not resolve home for module {mod_id}')
                 continue
             mod_type = self.module_type(raw_type)
             if not mod_type:
+                logging.warning(f'[WEBHOOK EVENT] Unknown module category for raw type "{raw_type}" (module {mod_id})')
                 continue
             self._ensure_instant_home(resolved_home)
             existing = dict(self.instant_data[resolved_home][mod_type].get(mod_id, {}))
@@ -244,26 +261,42 @@ class NetatmoWeather (NetatmoCloud):
             self.instant_data[resolved_home][mod_type][mod_id] = existing
             updated_homes.add(resolved_home)
             updated_inline = True
+            logging.info(f'[WEBHOOK EVENT] Updated instant data for {mod_id} ({mod_type}) in home {resolved_home}: {existing}')
 
         if updated_inline:
+            logging.info(
+                f'[WEBHOOK EVENT] updated_inline=True, has_inline_measurements={has_inline_measurements}, '
+                f'affected homes={updated_homes}'
+            )
             for h_id in updated_homes:
                 if not has_inline_measurements:
+                    logging.info(f'[WEBHOOK EVENT] No inline measurements; fetching instant telemetry via homestatus for home {h_id}...')
                     self.update_weather_info_instant(h_id)
                 else:
+                    logging.info(f'[WEBHOOK EVENT] Inline measurements present; merging data directly for home {h_id}...')
                     self.merge_data(h_id)
             return updated_homes
 
         # If webhook notification did not include inline module measurements (e.g. topology_changed or trigger),
         # refresh instant status for the affected home(s).
+        logging.info(
+            f'[WEBHOOK EVENT] No inline module data matched. Fallback refresh for home_id="{home_id}", '
+            f'device_id="{device_id}"'
+        )
         if not home_id and device_id:
             home_id, _ = self._resolve_home_and_type(device_id)
+            logging.info(f'[WEBHOOK EVENT] Resolved home_id "{home_id}" from device_id "{device_id}"')
         if home_id:
+            logging.info(f'[WEBHOOK EVENT] Refreshing homestatus for home {home_id}')
             self.update_weather_info_instant(home_id)
             updated_homes.add(home_id)
         elif hasattr(self, 'weather_in_homes') and self.weather_in_homes:
+            logging.info(f'[WEBHOOK EVENT] Refreshing homestatus for all known weather homes: {self.weather_in_homes}')
             for h_id in self.weather_in_homes:
                 self.update_weather_info_instant(h_id)
                 updated_homes.add(h_id)
+        else:
+            logging.warning('[WEBHOOK EVENT] Could not identify home or devices to refresh from webhook payload')
 
         return updated_homes
 

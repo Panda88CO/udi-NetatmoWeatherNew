@@ -13,6 +13,8 @@ import traceback
 import re
 import sys
 import threading
+import hmac
+import hashlib
 from threading import Thread
 from queue import Queue, Empty
 
@@ -131,31 +133,74 @@ class NetatmoController(udi_interface.Node):
         if 'webhook' in self.poly.Notices:
             self.poly.Notices.delete('webhook')
 
-    def webhook(self, data):
-        logging.info(f'webhook called with data: {data}')
-        if data is not None:
-            payload = data
-            if isinstance(payload, dict) and 'body' in payload:
-                body_data = payload['body']
-                if isinstance(body_data, str):
-                    try:
-                        payload = json.loads(body_data)
-                    except Exception:
-                        payload = data
-                elif isinstance(body_data, dict):
-                    payload = body_data
-            elif isinstance(payload, str):
-                try:
-                    payload = json.loads(payload)
-                except Exception:
-                    return
+    def _verify_webhook_signature(self, raw_body, headers):
+        if not headers or not isinstance(headers, dict):
+            return None
+        secret_header = headers.get('x-netatmo-secret') or headers.get('X-Netatmo-secret')
+        client_secret = getattr(self.myNetatmo, 'client_SECRET', None)
+        if not client_secret or not secret_header:
+            return None
+        try:
+            if isinstance(raw_body, str):
+                body_bytes = raw_body.encode('utf-8')
+            elif isinstance(raw_body, (bytes, bytearray)):
+                body_bytes = bytes(raw_body)
+            else:
+                body_bytes = json.dumps(raw_body).encode('utf-8')
+            secret_bytes = client_secret.encode('utf-8')
+            computed = hmac.new(secret_bytes, body_bytes, hashlib.sha256).hexdigest().lower()
+            return hmac.compare_digest(computed, secret_header.strip().lower())
+        except Exception as e:
+            logging.warning(f'[WEBHOOK] Signature check error: {e}')
+            return False
 
-            if isinstance(payload, dict) and payload.get('event') == 'webhook-test':
-                logging.info('Webhook test received!')
-                self.activate()
+    def webhook(self, data):
+        logging.info(f'[WEBHOOK] Raw webhook callback triggered: {data}')
+        if data is None:
+            logging.warning('[WEBHOOK] Received None data in webhook callback')
+            return
+
+        headers = data.get('headers', {}) if isinstance(data, dict) else {}
+        user_agent = headers.get('user-agent', 'Unknown')
+        source_ip = headers.get('x-forwarded-for') or headers.get('x-real-ip') or 'Unknown'
+        secret_header = headers.get('x-netatmo-secret') or headers.get('X-Netatmo-secret')
+
+        logging.info(
+            f'[WEBHOOK EVENT] Source: IP={source_ip}, User-Agent="{user_agent}", '
+            f'X-Netatmo-Secret={"present" if secret_header else "none"}'
+        )
+
+        payload = data
+        raw_body = None
+        if isinstance(payload, dict) and 'body' in payload:
+            raw_body = payload['body']
+            if isinstance(raw_body, str):
+                try:
+                    payload = json.loads(raw_body)
+                except Exception as e:
+                    logging.warning(f'[WEBHOOK] JSON parse error on payload body: {e}')
+                    payload = data
+            elif isinstance(raw_body, dict):
+                payload = raw_body
+        elif isinstance(payload, str):
+            raw_body = payload
+            try:
+                payload = json.loads(payload)
+            except Exception as e:
+                logging.warning(f'[WEBHOOK] JSON parse error on string payload: {e}')
                 return
 
-            self.insert_message(payload)
+        if secret_header:
+            sig_valid = self._verify_webhook_signature(raw_body, headers)
+            logging.info(f'[WEBHOOK EVENT] HMAC-SHA256 signature verification result: {sig_valid}')
+
+        if isinstance(payload, dict) and payload.get('event') == 'webhook-test':
+            logging.info('[WEBHOOK EVENT] Webhook self-test event received successfully!')
+            self.activate()
+            return
+
+        logging.info(f'[WEBHOOK EVENT] Queuing incoming webhook payload for processing: {payload}')
+        self.insert_message(payload)
 
     def insert_message(self, message):
         self.msg_queue.put(message)
@@ -173,15 +218,24 @@ class NetatmoController(udi_interface.Node):
                 logging.error(f'Error processing webhook message: {e}')
 
     def _handle_webhook_message(self, payload):
-        logging.debug(f'Handling Netatmo webhook payload: {payload}')
+        logging.info(f'[WEBHOOK WORKER] Processing payload: {payload}')
         self.node.setDriver('GV29', 1, True, True)
         updated_homes = self.myNetatmo.process_webhook_data(payload)
+        logging.info(f'[WEBHOOK WORKER] process_webhook_data returned updated homes: {updated_homes}')
         if self.nodeDefineDone and updated_homes:
-            self.node.setDriver('GV28', int(time.time()), True, True, 151)
+            now_ts = int(time.time())
+            self.node.setDriver('GV28', now_ts, True, True, 151)
             nodes = self.poly.nodes()
             for nde in nodes:
                 if nde.address != 'controller':
+                    logging.info(f'[WEBHOOK WORKER] Updating ISY drivers for node {nde.address} ({nde.name})')
                     nde.updateISYdrivers()
+            logging.info(f'[WEBHOOK WORKER] Finished updating ISY drivers across nodes for homes: {updated_homes}')
+        else:
+            logging.info(
+                f'[WEBHOOK WORKER] No ISY driver updates needed '
+                f'(nodeDefineDone={self.nodeDefineDone}, updated_homes={updated_homes})'
+            )
        
 
     def node_queue(self, data):
