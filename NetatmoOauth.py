@@ -117,6 +117,9 @@ class NetatmoCloud(OAuth):
         # Brief pause to avoid race condition with Netatmo application-level authorization webhook dispatch
         time.sleep(2)
         try:
+            logging.info('[WEBHOOK CONFIG] Dropping old webhook registrations before establishing new webhook...')
+            self.drop_webhook()
+            time.sleep(1)
             self.add_webhook()
         except Exception as e:
             logging.warning(f'[WEBHOOK] Error registering webhook in oauthHandler: {e}')
