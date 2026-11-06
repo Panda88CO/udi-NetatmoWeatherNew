@@ -341,6 +341,9 @@ class NetatmoCloud(OAuth):
 
             except requests.exceptions.HTTPError as error:
                 status_code = error.response.status_code if error.response is not None else None
+                if status_code == 409:
+                    logging.info(f"Call {method} {completeUrl} returned HTTP 409 (Conflict - already registered)")
+                    return {'status': 'ok', 'code': 409, 'message': 'already_registered'}
                 if status_code in retry_statuses and attempt < max_attempts:
                     delay = 1.5 * attempt
                     logging.warning(
@@ -433,10 +436,17 @@ class NetatmoCloud(OAuth):
             logging.error('[WEBHOOK CONFIG] No webhook URL available to register with Netatmo')
             return False
 
-        # Query existing webhooks for diagnostic visibility
+        # Check existing webhooks first
         try:
             current_webhooks = self.get_webhooks()
             logging.info(f'[WEBHOOK CONFIG] Existing webhooks before add: {current_webhooks}')
+            if isinstance(current_webhooks, dict):
+                body_list = current_webhooks.get('body', [])
+                if isinstance(body_list, list):
+                    for wh in body_list:
+                        if isinstance(wh, dict) and wh.get('url') == webhook_url:
+                            logging.info(f'[WEBHOOK CONFIG] Webhook URL {webhook_url} is already registered on Netatmo!')
+                            return True
         except Exception as e:
             logging.warning(f'[WEBHOOK CONFIG] Could not retrieve existing webhooks: {e}')
 
