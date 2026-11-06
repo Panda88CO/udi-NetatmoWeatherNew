@@ -22,7 +22,7 @@ Because Netatmo sends real-time sensor events to your eISY/Polisy via the Univer
 2. Enable PG3 Remote Connection at [https://my.isy.io](https://my.isy.io) (`Select Tool | PG3 | Remote connection` -> `Current status: Connected`).
 3. Go to the Polyglot Store in the UI and install.
 4. Add the NodeServer in PG3x (note: PG3 is not supported as the OAuth/Webhook library requires PG3x).
-5. Go to **Configuration** and enter `clientID` and `clientSecret` (see above), then restart.
+5. If credentials are not pre-configured in PG3 OAuth Configuration, enter your optional `clientID` and `clientSecret` under **Configuration** (see below) and restart.
 6. Authenticate when prompted: press the **Authenticate** button, log in with your Netatmo account credentials, press **Accept**, and you will be returned to the PG3x interface.
 7. Select which weather stations to use in Configuration (newly discovered stations default to `0`; set to `1` to enable) and restart the node server.
 8. Open the Admin Console to view your controller and weather station module nodes.
@@ -35,11 +35,11 @@ The settings for this node are:
 #### Long Poll
    * Refreshes OAuth tokens and queries Netatmo cloud summary data (such as daily min/max temperatures, max wind, and trends). Default is 30 minutes.
 
-#### clientID
-   * Your Netatmo App Client ID
+#### clientID (Optional)
+   * Your Netatmo App Client ID (optional if configured in PG3 OAuth Configuration)
 
-#### clientSecret
-   * Your Netatmo App Client Secret
+#### clientSecret (Optional)
+   * Your Netatmo App Client Secret (optional if configured in PG3 OAuth Configuration)
 
 #### TEMP_UNIT
    * `C` (default) or `F`

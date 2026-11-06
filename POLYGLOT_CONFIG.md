@@ -7,8 +7,8 @@
 
 #### Custom Configuration Parameters:
 
-- **clientID**: Client ID from your Netatmo Developer App (`https://dev.netatmo.com`).
-- **clientSecret**: Client Secret from your Netatmo Developer App (`https://dev.netatmo.com`).
+- **clientID** *(optional)*: Client ID from your Netatmo Developer App (`https://dev.netatmo.com`). Not needed if credentials are provided via PG3 OAuth Configuration.
+- **clientSecret** *(optional)*: Client Secret from your Netatmo Developer App (`https://dev.netatmo.com`). Not needed if credentials are provided via PG3 OAuth Configuration.
 - **TEMP_UNIT**: Temperature reporting unit (`C` or `F`).
 - **`<HomeName>_<StationName>`**: Select (`1`) or disable (`0`, default) each discovered Netatmo weather station, then restart the NodeServer.
 

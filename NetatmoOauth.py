@@ -73,13 +73,38 @@ class NetatmoCloud(OAuth):
         self.customDataHandlerDone = True
         logging.debug('customDataHandler Finished')
 
+    def _extract_oauth_credentials(self, key=None, data=None):
+        '''Extracts client_id, client_secret, and redirect_uri if provided by PG3 OAuth configuration.'''
+        sources = []
+        if isinstance(data, dict):
+            sources.append((f'customNs ({key})', data))
+        oauth_settings = getattr(self, 'oauthSettings', None)
+        if isinstance(oauth_settings, dict):
+            sources.append(('self.oauthSettings', oauth_settings))
+        oauth_config = getattr(self, 'oauthConfig', None)
+        if isinstance(oauth_config, dict):
+            sources.append(('self.oauthConfig', oauth_config))
+
+        for src_name, d in sources:
+            d_lower = {str(k).lower().replace(' ', '_').replace('-', '_'): v for k, v in d.items()}
+            cid = d_lower.get('client_id') or d_lower.get('clientid')
+            csecret = d_lower.get('client_secret') or d_lower.get('clientsecret')
+            ruri = d_lower.get('redirect_uri') or d_lower.get('redirecturi')
+
+            if cid and not self.client_ID:
+                self.client_ID = str(cid).strip()
+                logging.info(f'[OAUTH CONFIG] Obtained client_id from {src_name}: {self.client_ID}')
+            if csecret and not self.client_SECRET:
+                self.client_SECRET = str(csecret).strip()
+                logging.info(f'[OAUTH CONFIG] Obtained client_secret from {src_name}')
+            if ruri and not hasattr(self, 'redirect_URI'):
+                self.redirect_URI = str(ruri).strip()
+                logging.info(f'[OAUTH CONFIG] Obtained redirect_uri from {src_name}: {self.redirect_URI}')
+
     def customNsHandler(self, key, data):
-        logging.debug('customNsHandler called')
-        #while not self.customParamsDone():
-        #    logging.debug('Waiting for customNsHandler to complete')
-        #    time.sleep(1)
-        #self.updateOauthConfig()
+        logging.info(f'[OAUTH CONFIG] customNsHandler called with key="{key}", data={data}')
         super().customNsHandler(key, data)
+        self._extract_oauth_credentials(key, data)
         self.customNsHandlerDone = True
         logging.debug('customNsHandler Finished')
 
@@ -127,12 +152,14 @@ class NetatmoCloud(OAuth):
     def customParamsHandler(self, userParams):
         self.customParameters.load(userParams)
         logging.debug('customParamsHandler called {}'.format(userParams))
-        client_ok = False
-        secret_ok = False
         oauthSettingsUpdate = {}
         invalid_client_ids = {'', 'enter client_id', 'enter clientid', 'client_id', 'clientid'}
         invalid_client_secrets = {'', 'enter client_secret', 'enter clientsecret', 'client_secret', 'clientsecret'}
 
+        # First check if credentials were provided via PG3 OAuth Configuration
+        self._extract_oauth_credentials()
+
+        # Check if user explicitly provided clientID in custom parameters (optional override)
         client_id_val = userParams.get('clientID') if 'clientID' in userParams else userParams.get('ClientID')
         if client_id_val is None:
             client_id_val = (
@@ -145,15 +172,14 @@ class NetatmoCloud(OAuth):
             if cleaned_id.lower() not in invalid_client_ids and not cleaned_id.lower().startswith('enter '):
                 self.client_ID = cleaned_id
                 oauthSettingsUpdate['client_id'] = cleaned_id
-                client_ok = True
-            else:
-                logging.warning(f'clientID is still set to placeholder ({cleaned_id!r}); please enter a valid clientID')
-                self.client_ID = None
-        else:
-            logging.warning('No clientID found')
-            self.customParameters['clientID'] = 'Enter clientID'
-            self.client_ID = None
+            elif cleaned_id.lower() in invalid_client_ids or cleaned_id.lower().startswith('enter '):
+                # Clean up placeholder
+                if 'clientID' in self.customParameters:
+                    self.customParameters.delete('clientID')
+                if 'ClientID' in self.customParameters:
+                    self.customParameters.delete('ClientID')
 
+        # Check if user explicitly provided clientSecret in custom parameters (optional override)
         client_secret_val = (
             userParams.get('clientSecret')
             if 'clientSecret' in userParams
@@ -170,18 +196,12 @@ class NetatmoCloud(OAuth):
             if cleaned_secret.lower() not in invalid_client_secrets and not cleaned_secret.lower().startswith('enter '):
                 self.client_SECRET = cleaned_secret
                 oauthSettingsUpdate['client_secret'] = cleaned_secret
-                secret_ok = True
-            else:
-                logging.warning('clientSecret is still set to placeholder; please enter a valid clientSecret')
-                self.client_SECRET = None
-        else:
-            logging.warning('No clientSecret found')
-            self.customParameters['clientSecret'] = 'Enter clientSecret'
-            self.client_SECRET = None
-
-        if not client_ok or not secret_ok:
-            self.handleCustomParamsDone = False
-            self.poly.Notices['client'] = 'Please enter valid clientID and clientSecret - then restart'
+            elif cleaned_secret.lower() in invalid_client_secrets or cleaned_secret.lower().startswith('enter '):
+                # Clean up placeholder
+                if 'clientSecret' in self.customParameters:
+                    self.customParameters.delete('clientSecret')
+                if 'ClientSecret' in self.customParameters:
+                    self.customParameters.delete('ClientSecret')
 
         if "TEMP_UNIT" in self.customParameters and self.customParameters['TEMP_UNIT']:
             self.temp_unit = str(self.customParameters['TEMP_UNIT'])[0].upper()
@@ -193,6 +213,8 @@ class NetatmoCloud(OAuth):
         oauthSettingsUpdate['auth_endpoint'] = 'https://api.netatmo.com/oauth2/authorize'
         oauthSettingsUpdate['token_endpoint'] = 'https://api.netatmo.com/oauth2/token'
         oauthSettingsUpdate['addRedirect'] = True
+        if hasattr(self, 'redirect_URI') and self.redirect_URI:
+            oauthSettingsUpdate['redirect_uri'] = self.redirect_URI
         self.updateOauthSettings(oauthSettingsUpdate)
         if 'WEBHOOK_URL' in self.customParameters:
             self.customParameters.delete('WEBHOOK_URL')
@@ -207,10 +229,9 @@ class NetatmoCloud(OAuth):
                 except (ValueError, TypeError):
                     pass
 
-        if client_ok and secret_ok:
-            self.handleCustomParamsDone = True
-            if 'client' in self.poly.Notices:
-                self.poly.Notices.delete('client')
+        self.handleCustomParamsDone = True
+        if 'client' in self.poly.Notices:
+            self.poly.Notices.delete('client')
 
         #self.updateOauthConfig()
         #self.myParamBoolean = ('myParam' in self.customParametersand self.customParameters['myParam'].lower() == 'true')
