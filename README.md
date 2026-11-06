@@ -71,6 +71,11 @@ The settings and drivers for this node are:
 # Release Notes
 Code originally based on the NetatmoWeather node server and updated for OAuth2 and Netatmo Webhooks.
 
+- 1.2.0 11/06/2026
+   - Migrated to dynamic node definitions (`MAINUNITC`/`MAINUNITF`, `INDOORC`/`INDOORF`, `OUTDOORC`/`OUTDOORF`) loaded according to configured temperature unit (`TEMP_UNIT`)
+   - Eliminated multi-unit ranges and `uom="25"` fallbacks in numeric and measurement editors to fix eISY program evaluation issues
+   - Normalized all editor IDs and node definition IDs to uppercase with no underscores (`CONTROLLER`, `MAINUNITC`, `MAINUNITF`, `INDOORC`, `INDOORF`, `OUTDOORC`, `OUTDOORF`, `WIND`, `RAIN`)
+   - Initialized driver lists and offline states with proper measurement UOMs instead of defaulting to index UOM 25
 - 1.1.1 11/05/2026
    - Supported PG3 OAuth Configuration for shared client credentials (like `udi-nuheatv2`)
    - Enhanced webhook event debugging and modern `/webhooks/v1/` registration lifecycle

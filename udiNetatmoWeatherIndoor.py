@@ -52,19 +52,21 @@ class udiN_WeatherIndoor(udi_interface.Node):
         self.address = address
         self.name = name        
         self.n_queue = []
-        self.id = 'indoor'
+        self.temp_unit = 'F' if str(self.weather.temp_unit).upper().startswith('F') else 'C'
+        self.temp_uom = 17 if self.temp_unit == 'F' else 4
+        self.id = 'INDOORF' if self.temp_unit == 'F' else 'INDOORC'
         self.drivers = [
-            {'driver' : 'CLITEMP', 'value': 0,  'uom':4}, 
-            {'driver' : 'CO2LVL', 'value': 0,  'uom':54}, 
-            {'driver' : 'CLIHUM', 'value': 0,  'uom':22}, 
-            {'driver' : 'GV3', 'value': 0,  'uom':4}, 
-            {'driver' : 'GV4', 'value': 0,  'uom':4}, 
-            {'driver' : 'GV5', 'value': 99,  'uom':25}, 
-            {'driver' : 'GV6', 'value': 0,  'uom':44}, 
-            {'driver' : 'GV7', 'value': 99,  'uom':25}, 
-            {'driver' : 'GV8', 'value': 99,  'uom':25},
-            {'driver' : 'GV9', 'value': 99,  'uom':25},
-            {'driver' : 'ST', 'value': 0,  'uom':2}, 
+            {'driver' : 'CLITEMP', 'value': 0,  'uom': self.temp_uom}, 
+            {'driver' : 'CO2LVL', 'value': 0,  'uom': 54}, 
+            {'driver' : 'CLIHUM', 'value': 0,  'uom': 51}, 
+            {'driver' : 'GV3', 'value': 0,  'uom': self.temp_uom}, 
+            {'driver' : 'GV4', 'value': 0,  'uom': self.temp_uom}, 
+            {'driver' : 'GV5', 'value': 99,  'uom': 25}, 
+            {'driver' : 'GV6', 'value': 0,  'uom': 44}, 
+            {'driver' : 'GV7', 'value': 99,  'uom': 25}, 
+            {'driver' : 'GV8', 'value': 99,  'uom': 25},
+            {'driver' : 'GV9', 'value': 0,  'uom': 151},
+            {'driver' : 'ST', 'value': 0,  'uom': 2}, 
             ]
 
         
@@ -201,18 +203,22 @@ class udiN_WeatherIndoor(udi_interface.Node):
                     self.node.setDriver('GV9', int(ts), True, False, 151)
 
             else:
-                self.node.setDriver('CLITEMP', 99, True, False, 25 )
-                self.node.setDriver('GV3', 99, True, False, 25 )
-                self.node.setDriver('GV4', 99, True, False, 25 )
-                self.node.setDriver('CO2LVL', 99, True, False, 25 )
-                self.node.setDriver('CLIHUM', 99, True, False, 25 )
-                self.node.setDriver('GV5', 99, True, False, 25 )
-                self.node.setDriver('GV6', 99, True, False, 25 )
-                self.node.setDriver('GV7', 99, True, False, 25 )
-                self.node.setDriver('GV8', 99, True, False, 25 )
-                self.node.setDriver('GV9', 99, True, False, 25 )
+                self.node.setDriver('CLITEMP', 0, True, False, self.temp_uom)
+                self.node.setDriver('GV3', 0, True, False, self.temp_uom)
+                self.node.setDriver('GV4', 0, True, False, self.temp_uom)
+                self.node.setDriver('CO2LVL', 0, True, False, 54)
+                self.node.setDriver('CLIHUM', 0, True, False, 51)
+                self.node.setDriver('GV5', 99, True, False, 25)
+                self.node.setDriver('GV6', 0, True, False, 44)
+                self.node.setDriver('GV7', 99, True, False, 25)
+                self.node.setDriver('GV8', 99, True, False, 25)
+                self.node.setDriver('GV9', 0, True, False, 151)
                 self.node.setDriver('ST', 0) 
                 #self.node.setDriver('ERR', 1)                     
+
+    def setOffline(self):
+        if self.node is not None:
+            self.node.setDriver('ST', 0)                     
 
 
 

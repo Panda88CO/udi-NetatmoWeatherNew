@@ -29,7 +29,7 @@ except ImportError:
 from NetatmoWeather import NetatmoWeather
 from udiNetatmoWeatherMain import udiNetatmoWeatherMain
 
-version = '1.1.1'
+version = '1.2.0'
 
 
 class NetatmoController(udi_interface.Node):
@@ -79,18 +79,24 @@ class NetatmoController(udi_interface.Node):
             wait_cnt += 1
 
         super(NetatmoController, self).__init__(polyglot, primary, address, name)
+        self.id = 'CONTROLLER'
         self._ensure_controller_drivers()
         self.poly.addNode(self)
         self.node = self.poly.getNode(self.address)
         self.nodes_in_db = self.poly.getNodesFromDb()
 
     def _ensure_controller_drivers(self):
-        existing = {d['driver'] for d in self.drivers}
-        missing = [dict(d) for d in NetatmoController.drivers if d['driver'] not in existing]
-        if missing:
-            self.drivers.extend(missing)
-            return True
-        return False
+        updated = False
+        existing = {d['driver']: d for d in self.drivers}
+        for d in NetatmoController.drivers:
+            drv = d['driver']
+            if drv not in existing:
+                self.drivers.append(dict(d))
+                updated = True
+            elif existing[drv].get('uom') != d['uom']:
+                existing[drv]['uom'] = d['uom']
+                updated = True
+        return updated
 
     def init_webhook(self):
         logging.debug('init_webhook called')
@@ -498,12 +504,12 @@ class NetatmoController(udi_interface.Node):
             except Exception as e:
                 logging.error('Exeption occcured : {}'.format(e))
 
-    id = 'controller'
+    id = 'CONTROLLER'
     drivers = [
         {'driver': 'ST', 'value': 0, 'uom': 2},
-        {'driver': 'GV28', 'value': 99, 'uom': 25},
+        {'driver': 'GV28', 'value': 0, 'uom': 151},
         {'driver': 'GV29', 'value': 99, 'uom': 25},
-        {'driver': 'GV30', 'value': 99, 'uom': 25},
+        {'driver': 'GV30', 'value': 0, 'uom': 25},
     ]
     commands = {
         'UPDATE': update,

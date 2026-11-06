@@ -44,7 +44,7 @@ class udiN_WeatherRain(udi_interface.Node):
         self.primary = primary
         self.address = address
         self.name = name
-        self.id = 'rain'
+        self.id = 'RAIN'
         self.drivers = [
             {'driver' : 'GV0', 'value': 0,  'uom':82}, 
             {'driver' : 'GV1', 'value': 0,  'uom':82}, 
@@ -52,7 +52,7 @@ class udiN_WeatherRain(udi_interface.Node):
             {'driver' : 'GV3', 'value': 0,  'uom':44}, 
             {'driver' : 'GV4', 'value': 99,  'uom':25}, 
             {'driver' : 'GV5', 'value': 99,  'uom':25}, 
-            {'driver' : 'GV6', 'value': 99,  'uom':25},
+            {'driver' : 'GV6', 'value': 0,  'uom':151},
           
             {'driver' : 'ST', 'value': 0,  'uom':2}, 
             ]
@@ -179,15 +179,19 @@ class udiN_WeatherRain(udi_interface.Node):
                 if ts is not None:
                     self.node.setDriver('GV6', int(ts), True, False, 151)
             else:
-                self.node.setDriver('GV0', 99, True, False, 25 )
-                self.node.setDriver('GV1', 99, True, False, 25 )
-                self.node.setDriver('GV2', 99, True, False, 25 )
-                self.node.setDriver('GV3', 99, True, False, 25 )
-                self.node.setDriver('GV4', 99, True, False, 25 )
-                self.node.setDriver('GV5', 99, True, False, 25 )
-                self.node.setDriver('GV6', 99, True, False, 25 )
+                self.node.setDriver('GV0', 0, True, False, 82)
+                self.node.setDriver('GV1', 0, True, False, 82)
+                self.node.setDriver('GV2', 0, True, False, 82)
+                self.node.setDriver('GV3', 0, True, False, 44)
+                self.node.setDriver('GV4', 99, True, False, 25)
+                self.node.setDriver('GV5', 99, True, False, 25)
+                self.node.setDriver('GV6', 0, True, False, 151)
                 self.node.setDriver('ST', 0)
                 #self.node.setDriver('ERR', 1)
+
+    def setOffline(self):
+        if self.node is not None:
+            self.node.setDriver('ST', 0)
 
 
     commands = {        

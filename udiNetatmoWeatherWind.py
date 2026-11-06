@@ -48,7 +48,7 @@ class udiN_WeatherWind(udi_interface.Node):
         self.primary = primary
         self.address = address
         self.name = name        
-        self.id = 'wind'
+        self.id = 'WIND'
         self.drivers = [ 
             {'driver' : 'GV0', 'value': 0,  'uom':48},
             {'driver' : 'GV1', 'value': 0,  'uom':76},
@@ -59,7 +59,7 @@ class udiN_WeatherWind(udi_interface.Node):
             {'driver' : 'GV6', 'value': 0,  'uom':44},
             {'driver' : 'GV7', 'value': 99,  'uom':25},
             {'driver' : 'GV8', 'value': 99,  'uom':25},
-            {'driver' : 'GV9', 'value': 99,  'uom':25},
+            {'driver' : 'GV9', 'value': 0,  'uom':151},
             {'driver' : 'ST', 'value': 0,  'uom':2},
             ]
   
@@ -184,18 +184,22 @@ class udiN_WeatherWind(udi_interface.Node):
                 if ts is not None:
                     self.node.setDriver('GV9', int(ts), True, False, 151)
             else:
-                self.node.setDriver('GV0', 99, True, False, 25 )
-                self.node.setDriver('GV1', 99, True, False, 25 )
-                self.node.setDriver('GV2', 99, True, False, 25 )
-                self.node.setDriver('GV3', 99, True, False, 25 )
-                self.node.setDriver('GV4', 99, True, False, 25 )
-                self.node.setDriver('GV5', 99, True, False, 25 )
-                self.node.setDriver('GV6', 99, True, False, 25 )
-                self.node.setDriver('GV7', 99, True, False, 25 )
-                self.node.setDriver('GV8', 99, True, False, 25 )
-                self.node.setDriver('GV9', 99, True, False, 25 )
+                self.node.setDriver('GV0', 0, True, False, 48)
+                self.node.setDriver('GV1', 0, True, False, 76)
+                self.node.setDriver('GV2', 0, True, False, 48)
+                self.node.setDriver('GV3', 0, True, False, 76)
+                self.node.setDriver('GV4', 0, True, False, 48)
+                self.node.setDriver('GV5', 0, True, False, 76)
+                self.node.setDriver('GV6', 0, True, False, 44)
+                self.node.setDriver('GV7', 99, True, False, 25)
+                self.node.setDriver('GV8', 99, True, False, 25)
+                self.node.setDriver('GV9', 0, True, False, 151)
                 self.node.setDriver('ST', 0)
                 #self.node.setDriver('ERR', 1)
+
+    def setOffline(self):
+        if self.node is not None:
+            self.node.setDriver('ST', 0)
        
     commands = {        
         'UPDATE': update,

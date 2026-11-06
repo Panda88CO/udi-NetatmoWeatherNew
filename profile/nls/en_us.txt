@@ -1,4 +1,14 @@
-# controller
+# CONTROLLER
+ND-CONTROLLER-NAME = Netatmo System
+ND-CONTROLLER-ICON = Weather
+ST-CTRL-ST-NAME = NodeServer Online
+ST-CTRL-GV28-NAME = Last Update
+ST-CTRL-GV29-NAME = Connection Status
+ST-CTRL-GV30-NAME = Webhook Test
+CMD-CTRL-UPDATE-NAME = Force Update
+CMD-CTRL-TESTCON-NAME = Test Connection
+
+# Compatibility controller
 ND-controller-NAME = Netatmo System
 ND-controller-ICON = Weather
 ST-ctrl-ST-NAME = NodeServer Online
@@ -8,30 +18,39 @@ ST-ctrl-GV30-NAME = Webhook Test
 CMD-ctrl-UPDATE-NAME = Force Update
 CMD-ctrl-TESTCON-NAME = Test Connection
 
+# MAINUNIT (C and F)
+ND-MAINUNITC-NAME = Main Weather Station
+ND-MAINUNITC-ICON = Weather
+ND-MAINUNITF-NAME = Main Weather Station
+ND-MAINUNITF-ICON = Weather
 ND-mainunit-NAME = Main Weather Station
 ND-mainunit-ICON = Weather
 ST-MAIN-ST-NAME = Connected
-ST-MAIN-GV0-NAME = Temperature
-ST-MAIN-GV1-NAME = CO2
-ST-MAIN-GV2-NAME = Humidity
+ST-MAIN-CLITEMP-NAME = Temperature
+ST-MAIN-CO2LVL-NAME = CO2
+ST-MAIN-CLIHUM-NAME = Humidity
 ST-MAIN-GV3-NAME = Noise
-ST-MAIN-GV4-NAME = Pressure
+ST-MAIN-BARPRES-NAME = Pressure
 ST-MAIN-GV5-NAME = Absolute Pressure
 ST-MAIN-GV6-NAME = Min Temperature
 ST-MAIN-GV7-NAME = Max Temperature
 ST-MAIN-GV8-NAME = Temperature Trend
-# ST-MAIN-GV9-NAME = Pressure Trend
 ST-MAIN-GV10-NAME = Time since measurement
 ST-MAIN-GV11-NAME = Wi-Fi Status
 ST-MAIN-GV12-NAME = Last Update
-CMD-MAIN-UPDATE-NAME = Force Update 
+CMD-MAIN-UPDATE-NAME = Force Update
 
+# INDOOR (C and F)
+ND-INDOORC-NAME = Indoor Module
+ND-INDOORC-ICON = Weather
+ND-INDOORF-NAME = Indoor Module
+ND-INDOORF-ICON = Weather
 ND-indoor-NAME = Indoor Module
 ND-indoor-ICON = Weather
 ST-INDM-ST-NAME = Connected
-ST-INDM-GV0-NAME = Temperature
-ST-INDM-GV1-NAME = CO2
-ST-INDM-GV2-NAME = Humidity
+ST-INDM-CLITEMP-NAME = Temperature
+ST-INDM-CO2LVL-NAME = CO2
+ST-INDM-CLIHUM-NAME = Humidity
 ST-INDM-GV3-NAME = Min Temperature
 ST-INDM-GV4-NAME = Max Temperature
 ST-INDM-GV5-NAME = Temperature Trend
@@ -39,13 +58,18 @@ ST-INDM-GV6-NAME = Time since measurement
 ST-INDM-GV7-NAME = Battery
 ST-INDM-GV8-NAME = RF Status
 ST-INDM-GV9-NAME = Last Update
-CMD-INDM-UPDATE-NAME = Force Update 
+CMD-INDM-UPDATE-NAME = Force Update
 
+# OUTDOOR (C and F)
+ND-OUTDOORC-NAME = Outdoor Module
+ND-OUTDOORC-ICON = Weather
+ND-OUTDOORF-NAME = Outdoor Module
+ND-OUTDOORF-ICON = Weather
 ND-outdoor-NAME = Outdoor Module
 ND-outdoor-ICON = Weather
 ST-OUTM-ST-NAME = Connected
-ST-OUTM-GV0-NAME = Temperature
-ST-OUTM-GV1-NAME = Humidity
+ST-OUTM-CLITEMP-NAME = Temperature
+ST-OUTM-CLIHUM-NAME = Humidity
 ST-OUTM-GV2-NAME = Min Temperature
 ST-OUTM-GV3-NAME = Max Temperature
 ST-OUTM-GV4-NAME = Temperature Trend
@@ -53,8 +77,11 @@ ST-OUTM-GV5-NAME = Time since measurement
 ST-OUTM-GV6-NAME = Battery
 ST-OUTM-GV7-NAME = RF Status
 ST-OUTM-GV8-NAME = Last Update
-CMD-OUTM-UPDATE-NAME = Force Update 
+CMD-OUTM-UPDATE-NAME = Force Update
 
+# WIND
+ND-WIND-NAME = Wind Module
+ND-WIND-ICON = Weather
 ND-wind-NAME = Wind Module
 ND-wind-ICON = Weather
 ST-WINM-ST-NAME = Connected
@@ -68,8 +95,11 @@ ST-WINM-GV6-NAME = Time since measurement
 ST-WINM-GV7-NAME = Battery
 ST-WINM-GV8-NAME = RF Status
 ST-WINM-GV9-NAME = Last Update
-CMD-WINM-UPDATE-NAME = Force Update 
+CMD-WINM-UPDATE-NAME = Force Update
 
+# RAIN
+ND-RAIN-NAME = Rain Module
+ND-RAIN-ICON = Weather
 ND-rain-NAME = Rain Module
 ND-rain-ICON = Weather
 ST-RAIM-ST-NAME = Connected
@@ -80,15 +110,26 @@ ST-RAIM-GV3-NAME = Time since measurement
 ST-RAIM-GV4-NAME = Battery
 ST-RAIM-GV5-NAME = RF Status
 ST-RAIM-GV6-NAME = Last Update
-CMD-RAIM-UPDATE-NAME = Force Update 
+CMD-RAIM-UPDATE-NAME = Force Update
+
+# Enums
+TREND-0 = Stable
+TREND-1 = Up
+TREND-2 = Down
+TREND-99 = Unknown
 
 EN_TREND-0 = Stable
 EN_TREND-1 = Up
 EN_TREND-2 = Down
 EN_TREND-99 = Unknown
 
-error-0 = No reading
-error-99 = Unknown
+BATTERY-0 = Maximum
+BATTERY-1 = Full
+BATTERY-2 = High
+BATTERY-3 = Medium
+BATTERY-4 = Low
+BATTERY-5 = Very Low
+BATTERY-99 = Unknown
 
 battery-0 = Maximum
 battery-1 = Full
@@ -97,6 +138,11 @@ battery-3 = Medium
 battery-4 = Low
 battery-5 = Very Low
 battery-99 = Unknown
+
+RFSTATUS-0 = Strong
+RFSTATUS-1 = Medium
+RFSTATUS-2 = Low
+RFSTATUS-99 = Unknown
 
 rf_status-0 = Strong
 rf_status-1 = Medium
@@ -108,6 +154,14 @@ STREAMSYNC-1 = Connected
 STREAMSYNC-98 = Error
 STREAMSYNC-99 = Unknown
 
+TESTCON-0 = Idle
+TESTCON-1 = Testing...
+TESTCON-2 = Success
+TESTCON-3 = Timeout
+TESTCON-4 = Failure
+TESTCON-98 = Error
+TESTCON-99 = Unknown
+
 TEST-0 = Idle
 TEST-1 = Testing...
 TEST-2 = Success
@@ -115,4 +169,3 @@ TEST-3 = Timeout
 TEST-4 = Failure
 TEST-98 = Error
 TEST-99 = Unknown
-
