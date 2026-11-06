@@ -11,6 +11,9 @@ Authentication uses standard OAuth2.
 - **Shared Credentials (Recommended)**: If Client ID and Client Secret are pre-configured in PG3's OAuth Configuration (like `udi-nuheatv2`), simply click **Authenticate** in the PG3 dashboard.
 - **Custom Developer App (Optional)**: If you prefer using your own developer credentials, log in at the [Netatmo Developer Portal](https://dev.netatmo.com), navigate to **My Apps** -> **Create**, and enter your `clientID` and `clientSecret` in the node server's Configuration parameters.
 
+> [!NOTE]
+> When updating or changing the Client ID and Client Secret, always click **Authenticate** in PG3. The node server automatically deletes any previous webhook subscriptions on Netatmo and re-establishes a fresh webhook bound to the new credentials, ensuring HMAC signature verification (`X-Netatmo-secret`) and event delivery remain valid.
+
 ## Enabling External Webhook Access (PG3x Remote Connection)
 
 Because Netatmo sends real-time sensor events to your eISY/Polisy via the Universal Devices ISY Portal webhook endpoint:
@@ -71,6 +74,7 @@ Code originally based on the NetatmoWeather node server and updated for OAuth2 a
 - 1.1.1 11/05/2026
    - Supported PG3 OAuth Configuration for shared client credentials (like `udi-nuheatv2`)
    - Enhanced webhook event debugging and modern `/webhooks/v1/` registration lifecycle
+   - Added automatic webhook drop and re-establishment when re-authenticating with new credentials
    - Added `Last Update` timestamp driver (`uom 151`) across controller and all sensor modules
 - 1.1.0 11/05/2026
    - Updated to use the latest Netatmo API with real-time Webhooks (`https://dev.netatmo.com/apidocumentation/webhooks`) instead of short-poll API polling
