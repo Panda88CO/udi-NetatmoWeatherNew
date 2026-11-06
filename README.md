@@ -56,6 +56,10 @@ The settings for this node are:
 # Release Notes
 Code originally based on the NetatmoWeather node server and updated for OAuth2 and Netatmo Webhooks.
 
+- 1.1.1 11/05/2026
+   - Supported PG3 OAuth Configuration for shared client credentials (like `udi-nuheatv2`)
+   - Enhanced webhook event debugging and modern `/webhooks/v1/` registration lifecycle
+   - Added `Last Update` timestamp driver (`uom 151`) across controller and all sensor modules
 - 1.1.0 11/05/2026
    - Updated to use the latest Netatmo API with real-time Webhooks (`https://dev.netatmo.com/apidocumentation/webhooks`) instead of short-poll API polling
    - Added startup webhook self-test (`Webhook Test` driver `GV30`, `Connection Status` driver `GV29`, and `Test Connection` command) like `TeslaEV3`
