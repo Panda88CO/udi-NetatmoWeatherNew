@@ -89,7 +89,10 @@ class NetatmoCloud(OAuth):
             logging.debug('Waiting for oauthHandler to complete')
             time.sleep(5)
         super().oauthHandler(token)
-        #self.customOauthHandlerDone = True
+        try:
+            self.add_webhook()
+        except Exception as e:
+            logging.warning(f'Error registering webhook in oauthHandler: {e}')
         logging.debug('oauthHandler Finished')
 
     def customNsDone(self):
@@ -415,15 +418,13 @@ class NetatmoCloud(OAuth):
             logging.error('No webhook URL available to register with Netatmo')
             return False
         encoded_url = urllib.parse.quote_plus(webhook_url)
-        api_str = f'/addwebhook?url={encoded_url}'
-        res = self._callApi('POST', api_str)
-        if res is None:
-            api_str_fallback = f'/addwebhook?url={encoded_url}&app_type=app_station'
-            res = self._callApi('POST', api_str_fallback)
+        res_default = self._callApi('POST', f'/addwebhook?url={encoded_url}')
+        res_station = self._callApi('POST', f'/addwebhook?url={encoded_url}&app_type=app_station')
+        res = res_default if (isinstance(res_default, dict) and res_default.get('status') == 'ok') else res_station
         if isinstance(res, dict) and res.get('status') == 'ok':
             logging.info(f'Successfully registered Netatmo webhook: {webhook_url}')
             return True
-        logging.warning(f'Netatmo addwebhook response: {res}')
+        logging.warning(f'Netatmo addwebhook response: default={res_default}, app_station={res_station}')
         return res is not None
 
     def drop_webhook(self):
