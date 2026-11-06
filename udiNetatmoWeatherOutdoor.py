@@ -52,7 +52,7 @@ class udiN_WeatherOutdoor(udi_interface.Node):
         self.name = name
         self.temp_unit = 'F' if str(self.weather.temp_unit).upper().startswith('F') else 'C'
         self.temp_uom = 17 if self.temp_unit == 'F' else 4
-        self.id = 'OUTDOORF' if self.temp_unit == 'F' else 'OUTDOORC'
+        self.id = 'OUTDOOR'
         self.drivers = [
             {'driver' : 'CLITEMP', 'value': 0,  'uom': self.temp_uom}, 
             {'driver' : 'CLIHUM', 'value': 0,  'uom': 51}, 

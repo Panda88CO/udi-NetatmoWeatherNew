@@ -26,6 +26,9 @@ except ImportError:
     import logging
     logging.basicConfig(level=logging.DEBUG)
 
+import os
+import shutil
+import dynamic_profile
 from NetatmoWeather import NetatmoWeather
 from udiNetatmoWeatherMain import udiNetatmoWeatherMain
 
@@ -42,6 +45,11 @@ class NetatmoController(udi_interface.Node):
         self.accessToken = None
         self.nodeDefineDone = False
         self.configDone = False
+        self._started = False
+        self._controller_node_added = False
+        self._profile_loaded = False
+        self._pending_profile_publish = False
+        self._last_published_profile = None
         self.name = name
         self.primary = primary
         self.address = address
@@ -63,7 +71,7 @@ class NetatmoController(udi_interface.Node):
 
         self.poly.subscribe(self.poly.STOP, self.stopHandler)
         self.poly.subscribe(self.poly.START, self.start, address)
-        self.poly.subscribe(self.poly.CUSTOMPARAMS, self.myNetatmo.customParamsHandler)
+        self.poly.subscribe(self.poly.CUSTOMPARAMS, self.customParamsHandler)
         self.poly.subscribe(self.poly.CUSTOMNS, self.myNetatmo.customNsHandler)
         self.poly.subscribe(self.poly.OAUTH, self.myNetatmo.oauthHandler)
         self.poly.subscribe(self.poly.CONFIGDONE, self.configDoneHandler)
@@ -71,7 +79,15 @@ class NetatmoController(udi_interface.Node):
         self.poly.subscribe(self.poly.POLL, self.systemPoll)
         self.poly.subscribe(self.poly.WEBHOOK, self.webhook)
 
-        self.poly.updateProfile()
+        profile_dir = os.path.join(os.path.dirname(__file__), "profile")
+        if os.path.isdir(profile_dir):
+            try:
+                shutil.rmtree(profile_dir)
+                logging.info("Removed legacy static profile/ folder")
+            except Exception as e:
+                logging.debug(f"Legacy profile cleanup: {e}")
+
+        # Dynamic profile will be published after the controller node has initialized
         self.poly.ready()
         wait_cnt = 0
         while not self.configDone and wait_cnt < 50:
@@ -245,7 +261,13 @@ class NetatmoController(udi_interface.Node):
        
 
     def node_queue(self, data):
-        self.n_queue.append(data['address'])
+        node_address = data.get('address') if isinstance(data, dict) else getattr(data, 'address', None)
+        if node_address == self.address:
+            self._controller_node_added = True
+            logging.info("ADDNODEDONE received for controller node")
+            self._maybe_load_profile("ADDNODEDONE")
+        if node_address:
+            self.n_queue.append(node_address)
 
     def wait_for_node_done(self):
         while len(self.n_queue) == 0:
@@ -284,6 +306,8 @@ class NetatmoController(udi_interface.Node):
 
     def start(self):
         logging.info('Executing start')
+        self._started = True
+        self._maybe_load_profile("START")
         while not self.configDone:
             time.sleep(1)
             logging.debug('Waiting for PG3x CONFIGDONE to complete')
@@ -337,6 +361,7 @@ class NetatmoController(udi_interface.Node):
 
         self.temp_unit = self.convert_temp_unit(self.myNetatmo.temp_unit)
         logging.debug('TEMP_UNIT: {}'.format(self.temp_unit))
+        self._publish_profile()
 
         while not (self.myNetatmo.customParamsDone() and self.myNetatmo.customNsDone() and self.configDone):
             logging.info('Waiting for configuration to complete')
@@ -421,6 +446,62 @@ class NetatmoController(udi_interface.Node):
 
         self.nodeDefineDone = True
 
+    def _maybe_load_profile(self, reason: str = "") -> None:
+        if self._profile_loaded:
+            return
+        if not (self._controller_node_added or self._started or getattr(self, 'node', None) is not None):
+            logging.info(f"Controller node not yet initialized ({reason}); deferring dynamic profile load")
+            self._pending_profile_publish = True
+            return
+        logging.info(f"Controller node initialized ({reason}); loading dynamic profile")
+        self._publish_profile()
+
+    def _publish_profile(self, wait_response: bool = False, force: bool = False) -> None:
+        update_json_profile = getattr(self.poly, "updateJsonProfile", None)
+        if not callable(update_json_profile):
+            logging.warning("[_publish_profile] updateJsonProfile is unavailable in this environment")
+            return
+
+        # Do not load profile until the controller node has initialized
+        if not (self._controller_node_added or self._started or getattr(self, 'node', None) is not None):
+            logging.info("[_publish_profile] Controller node not yet initialized; deferring profile publish")
+            self._pending_profile_publish = True
+            return
+
+        profile = dynamic_profile.build_profile_definition(self.myNetatmo.temp_unit)
+        if not force and hasattr(self, "_last_published_profile") and self._last_published_profile == profile:
+            logging.debug("[_publish_profile] Profile already published and up to date, skipping")
+            return
+
+        try:
+            logging.info(f"Publishing dynamic JSON profile for TEMP_UNIT={self.myNetatmo.temp_unit}")
+            update_json_profile(profile, {"waitResponse": wait_response})
+            self._last_published_profile = profile
+            self._profile_loaded = True
+            self._pending_profile_publish = False
+            logging.info("Dynamic JSON profile published successfully")
+            if self.poly.Notices.get("profile"):
+                self.poly.Notices.delete("profile")
+        except TypeError:
+            update_json_profile(profile)
+            self._last_published_profile = profile
+            self._profile_loaded = True
+            self._pending_profile_publish = False
+            logging.info("Dynamic JSON profile published successfully")
+            if self.poly.Notices.get("profile"):
+                self.poly.Notices.delete("profile")
+        except Exception as err:
+            logging.error(f"[_publish_profile] Dynamic profile publish failed: {err}")
+            self.poly.Notices["profile"] = f"Dynamic profile publish failed: {err}"
+
+    def customParamsHandler(self, userParams):
+        logging.info('Controller customParamsHandler called')
+        self.myNetatmo.customParamsHandler(userParams)
+        if self._profile_loaded:
+            self._publish_profile(force=True)
+        else:
+            self._pending_profile_publish = True
+
     def configDoneHandler(self):
         # We use this to discover devices, or ask to authenticate if user has not already done so
         if self.myNetatmo.customParamsDone() and 'client' in self.poly.Notices:
@@ -431,6 +512,8 @@ class NetatmoController(udi_interface.Node):
         if hasattr(self, 'drivers') and self._ensure_controller_drivers():
             self.poly.addNode(self)
         self.configDone = True
+        if self._pending_profile_publish or self._controller_node_added or self._started:
+            self._maybe_load_profile("CONFIGDONE")
 
     def systemPoll(self, polltype):
         if self.nodeDefineDone:

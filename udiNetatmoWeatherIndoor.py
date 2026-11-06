@@ -54,7 +54,7 @@ class udiN_WeatherIndoor(udi_interface.Node):
         self.n_queue = []
         self.temp_unit = 'F' if str(self.weather.temp_unit).upper().startswith('F') else 'C'
         self.temp_uom = 17 if self.temp_unit == 'F' else 4
-        self.id = 'INDOORF' if self.temp_unit == 'F' else 'INDOORC'
+        self.id = 'INDOOR'
         self.drivers = [
             {'driver' : 'CLITEMP', 'value': 0,  'uom': self.temp_uom}, 
             {'driver' : 'CO2LVL', 'value': 0,  'uom': 54}, 

@@ -84,7 +84,7 @@ class udiNetatmoWeatherMain(udi_interface.Node):
 
         self.temp_unit = 'F' if str(self.weather.temp_unit).upper().startswith('F') else 'C'
         self.temp_uom = 17 if self.temp_unit == 'F' else 4
-        self.id = 'MAINUNITF' if self.temp_unit == 'F' else 'MAINUNITC'
+        self.id = 'MAINUNIT'
         self.drivers = [
             {'driver' : 'CLITEMP', 'value': 0,  'uom': self.temp_uom}, 
             {'driver' : 'CO2LVL', 'value': 0,  'uom': 54}, 
