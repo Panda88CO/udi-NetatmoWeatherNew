@@ -6,7 +6,10 @@ MIT license.
 
 This node server integrates the Netatmo Weather Station using the latest Netatmo API (`/homesdata`, `/homestatus`, and [Netatmo Webhooks](https://dev.netatmo.com/apidocumentation/webhooks)) so real-time station and module updates are pushed via webhooks rather than relying on constant short-interval polling.
 
-You will need account access to your Netatmo account via the [Netatmo Developer Portal](https://dev.netatmo.com). Log in and select **My Apps** and then **Create**. Fill in the app info and press **Save** — this exposes a `clientID` and `clientSecret`.
+### Authentication
+Authentication uses standard OAuth2. 
+- **Shared Credentials (Recommended)**: If Client ID and Client Secret are pre-configured in PG3's OAuth Configuration (like `udi-nuheatv2`), simply click **Authenticate** in the PG3 dashboard.
+- **Custom Developer App (Optional)**: If you prefer using your own developer credentials, log in at the [Netatmo Developer Portal](https://dev.netatmo.com), navigate to **My Apps** -> **Create**, and enter your `clientID` and `clientSecret` in the node server's Configuration parameters.
 
 ## Enabling External Webhook Access (PG3x Remote Connection)
 
@@ -14,7 +17,7 @@ Because Netatmo sends real-time sensor events to your eISY/Polisy via the Univer
 1. Log in to [https://my.isy.io](https://my.isy.io).
 2. Navigate to **Select Tool | PG3 | Remote connection**.
 3. Ensure the remote connection is enabled and reads **"Current status: Connected"** (it may take up to a minute after switching it on to take effect).
-4. During startup (or when pressing **Test Connection** on the controller node in the Admin Console), the node server performs an end-to-end webhook test through `https://my.isy.io/api/eisy/pg3/webhook/noresponse/<uuid>/<slot>`, registers the webhook automatically with Netatmo via `/addwebhook`, and reports the status in the **Webhook Test** (`GV30`) and **Connection Status** (`GV29`) drivers.
+4. During startup (or when pressing **Test Connection** on the controller node in the Admin Console), the node server performs an end-to-end webhook test through `https://my.isy.io/api/eisy/pg3/webhook/noresponse/<uuid>/<slot>`, verifies/registers the webhook endpoint automatically with Netatmo (via `POST /webhooks/v1/`), and reports the status in the **Webhook Test** (`GV30`) and **Connection Status** (`GV29`) drivers.
 
 ## Installation
 
@@ -27,13 +30,22 @@ Because Netatmo sends real-time sensor events to your eISY/Polisy via the Univer
 7. Select which weather stations to use in Configuration (newly discovered stations default to `0`; set to `1` to enable) and restart the node server.
 8. Open the Admin Console to view your controller and weather station module nodes.
 
-### Node Settings
-The settings for this node are:
+### Node Settings & Drivers
+The settings and drivers for this node are:
 
 #### Short Poll
    * Sends a heartbeat (`DON`/`DOF`) and updates local drivers (such as `Time since measurement`). Real-time measurements are received via Netatmo webhooks (with automatic fallback to `/homestatus` if webhooks are not active). Default is 5 minutes.
 #### Long Poll
    * Refreshes OAuth tokens and queries Netatmo cloud summary data (such as daily min/max temperatures, max wind, and trends). Default is 30 minutes.
+
+#### Connection Status (`GV29`)
+   * Reports `1` when real-time Netatmo webhook delivery is connected and active; reports `0` when operating in polling fallback mode.
+
+#### Webhook Test (`GV30`)
+   * Result of the portal loopback self-test (`0: None`, `1: Testing`, `2: Success`, `3: Timeout`, `4: Failure`).
+
+#### Last Update (`uom 151`)
+   * Unix timestamp of the most recent weather telemetry received (present on Controller `GV28` and all sensor nodes).
 
 #### clientID (Optional)
    * Your Netatmo App Client ID (optional if configured in PG3 OAuth Configuration)
