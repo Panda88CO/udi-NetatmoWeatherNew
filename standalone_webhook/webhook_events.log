@@ -1,0 +1,113 @@
+
+======================================================================
+INCOMING WEBHOOK POST /webhook
+Time       : 2026-11-13T08:47:37.602789
+Source IP  : 127.0.0.1
+User-Agent : Python-urllib/3.9
+HMAC Header: present | Valid: True
+Body:
+{
+  "push_type": "device_event",
+  "home_id": "test_home",
+  "device_id": "70:ee:50:29:2f:e0",
+  "extra_params": {
+    "modules": [
+      {
+        "id": "70:ee:50:29:2f:e0",
+        "type": "NAMain",
+        "temperature": 20.5,
+        "co2": 450
+      }
+    ]
+  }
+}
+======================================================================
+
+======================================================================
+INCOMING WEBHOOK POST /webhook
+Time       : 2026-11-13T08:52:45.674882
+Source IP  : 127.0.0.1
+User-Agent : Python-urllib/3.9
+HMAC Header: present | Valid: True
+Body:
+{
+  "push_type": "device_event",
+  "home_id": "test_home",
+  "device_id": "70:ee:50:29:2f:e0",
+  "extra_params": {
+    "modules": [
+      {
+        "id": "70:ee:50:29:2f:e0",
+        "type": "NAMain",
+        "temperature": 20.5,
+        "co2": 450
+      }
+    ]
+  }
+}
+======================================================================
+
+======================================================================
+INCOMING WEBHOOK POST /webhook
+Time       : 2026-11-13T08:58:39.943860
+Source IP  : 127.0.0.1
+User-Agent : Unknown
+HMAC Header: present | Valid: True
+Body:
+{
+  "push_type": "webhook_activation",
+  "user_id": "590aba75ee261c2b548bf4c0"
+}
+======================================================================
+
+======================================================================
+INCOMING WEBHOOK POST /webhook
+Time       : 2026-11-13T08:59:11.106078
+Source IP  : 127.0.0.1
+User-Agent : Unknown
+HMAC Header: present | Valid: True
+Body:
+{
+  "push_type": "webhook_activation",
+  "user_id": "590aba75ee261c2b548bf4c0"
+}
+======================================================================
+
+======================================================================
+INCOMING WEBHOOK POST /webhook
+Time       : 2026-11-13T08:59:53.611814
+Source IP  : 127.0.0.1
+User-Agent : Unknown
+HMAC Header: present | Valid: True
+Body:
+{
+  "user_id": "590aba75ee261c2b548bf4c0",
+  "push_type": "webhook_activation"
+}
+======================================================================
+
+======================================================================
+INCOMING WEBHOOK POST /webhook
+Time       : 2026-11-13T09:47:11.000399
+Source IP  : 127.0.0.1
+User-Agent : Unknown
+HMAC Header: present | Valid: True
+Body:
+{
+  "push_type": "webhook_activation",
+  "user_id": "590aba75ee261c2b548bf4c0"
+}
+======================================================================
+
+======================================================================
+INCOMING WEBHOOK POST /webhook
+Time       : 2026-11-13T09:48:07.943122
+Source IP  : 127.0.0.1
+User-Agent : Unknown
+HMAC Header: present | Valid: True
+Body:
+{
+  "user_id": "590aba75ee261c2b548bf4c0",
+  "push_type": "webhook_activation"
+}
+======================================================================
