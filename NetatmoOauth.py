@@ -346,7 +346,10 @@ class NetatmoCloud(OAuth):
                     else:
                         response = requests.post(completeUrl, headers=headers, timeout=15)
                 elif method == 'PUT':
-                    response = requests.put(completeUrl, headers=headers, timeout=15)
+                    if body is not None:
+                        response = requests.put(completeUrl, headers=headers, json=body, timeout=15)
+                    else:
+                        response = requests.put(completeUrl, headers=headers, timeout=15)
 
                 if response.status_code in retry_statuses and attempt < max_attempts:
                     delay = 1.5 * attempt
@@ -452,27 +455,32 @@ class NetatmoCloud(OAuth):
         logging.info(f'[WEBHOOK CONFIG] Current Netatmo webhooks: {res}')
         return res
 
-    def add_webhook(self, webhook_url=None):
+    def add_webhook(self, webhook_url=None, force=False):
         if webhook_url is None:
             webhook_url = self.get_webhook_url()
-        logging.info(f'[WEBHOOK CONFIG] add_webhook called for URL: {webhook_url}')
+        logging.info(f'[WEBHOOK CONFIG] add_webhook called for URL: {webhook_url} (force={force})')
         if not webhook_url:
             logging.error('[WEBHOOK CONFIG] No webhook URL available to register with Netatmo')
             return False
 
-        # Check existing webhooks first
-        try:
-            current_webhooks = self.get_webhooks()
-            logging.info(f'[WEBHOOK CONFIG] Existing webhooks before add: {current_webhooks}')
-            if isinstance(current_webhooks, dict):
-                body_list = current_webhooks.get('body', [])
-                if isinstance(body_list, list):
-                    for wh in body_list:
-                        if isinstance(wh, dict) and wh.get('url') == webhook_url:
-                            logging.info(f'[WEBHOOK CONFIG] Webhook URL {webhook_url} is already registered on Netatmo!')
-                            return True
-        except Exception as e:
-            logging.warning(f'[WEBHOOK CONFIG] Could not retrieve existing webhooks: {e}')
+        if force:
+            logging.info('[WEBHOOK CONFIG] Force re-registration requested; dropping previous webhooks first')
+            self.drop_webhook()
+            time.sleep(1)
+        else:
+            # Check existing webhooks first
+            try:
+                current_webhooks = self.get_webhooks()
+                logging.info(f'[WEBHOOK CONFIG] Existing webhooks before add: {current_webhooks}')
+                if isinstance(current_webhooks, dict):
+                    body_list = current_webhooks.get('body', [])
+                    if isinstance(body_list, list):
+                        for wh in body_list:
+                            if isinstance(wh, dict) and wh.get('url') == webhook_url:
+                                logging.info(f'[WEBHOOK CONFIG] Webhook URL {webhook_url} is already registered on Netatmo!')
+                                return True
+            except Exception as e:
+                logging.warning(f'[WEBHOOK CONFIG] Could not retrieve existing webhooks: {e}')
 
         # 1. Try modern Netatmo endpoint (POST /webhooks/v1/ with JSON body {"url": webhook_url})
         logging.info(f'[WEBHOOK CONFIG] Attempting registration via POST https://api.netatmo.com/webhooks/v1/ ...')
@@ -482,7 +490,15 @@ class NetatmoCloud(OAuth):
             logging.info(f'[WEBHOOK CONFIG] Successfully registered modern Netatmo webhook: {webhook_url}')
             return True
 
-        # 2. Try legacy /api/addwebhook endpoint as fallback
+        # 2. Try modern Netatmo replace endpoint (PUT /webhooks/v1/ with JSON body {"url": webhook_url})
+        logging.info(f'[WEBHOOK CONFIG] Fallback: Attempting replace via PUT https://api.netatmo.com/webhooks/v1/ ...')
+        res_put = self._callApi('PUT', '/webhooks/v1/', body={'url': webhook_url})
+        logging.info(f'[WEBHOOK CONFIG] Modern PUT /webhooks/v1/ response: {res_put}')
+        if res_put is not None and not (isinstance(res_put, dict) and (res_put.get('error') or res_put.get('status') == 'error')):
+            logging.info(f'[WEBHOOK CONFIG] Successfully replaced Netatmo webhook via PUT: {webhook_url}')
+            return True
+
+        # 3. Try legacy /api/addwebhook endpoint as fallback
         encoded_url = urllib.parse.quote_plus(webhook_url)
         logging.info(f'[WEBHOOK CONFIG] Fallback: Calling legacy POST /api/addwebhook?url={encoded_url}')
         res_default = self._callApi('POST', f'/addwebhook?url={encoded_url}')
@@ -491,7 +507,7 @@ class NetatmoCloud(OAuth):
             logging.info(f'[WEBHOOK CONFIG] Successfully registered Netatmo webhook via /addwebhook: {webhook_url}')
             return True
 
-        # 3. Try legacy /api/addwebhook?app_type=app_station as fallback
+        # 4. Try legacy /api/addwebhook?app_type=app_station as fallback
         logging.info(f'[WEBHOOK CONFIG] Fallback: Calling legacy POST /api/addwebhook?url={encoded_url}&app_type=app_station')
         res_station = self._callApi('POST', f'/addwebhook?url={encoded_url}&app_type=app_station')
         logging.info(f'[WEBHOOK CONFIG] Legacy /addwebhook?app_type=app_station response: {res_station}')

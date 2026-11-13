@@ -120,7 +120,7 @@ class NetatmoController(udi_interface.Node):
         time.sleep(2)
 
     def webhook_test(self, param=None):
-        logging.debug(f'webhook_test called {param}')
+        logging.info(f'[WEBHOOK TEST] webhook_test called (param={param})')
         body = {'event': 'webhook-test', 'data': {'type': 'test', 'description': 'webhook test'}}
         try:
             if self.webhookTimer is not None:
@@ -128,6 +128,16 @@ class NetatmoController(udi_interface.Node):
                 self.webhookTimer = None
             self.webhookSuccess = 'Unknown'
             self.node.setDriver('GV30', 1, True, True)
+
+            # Query Netatmo for current active webhooks
+            if hasattr(self.myNetatmo, 'authendicated') and self.myNetatmo.authendicated():
+                current = self.myNetatmo.get_webhooks()
+                logging.info(f'[WEBHOOK TEST] Netatmo GET /webhooks/v1/ result: {current}')
+                # If explicit force re-register is requested or webhooks list is empty
+                if param == 'force' or not (isinstance(current, dict) and current.get('body')):
+                    logging.info('[WEBHOOK TEST] Re-establishing user-level webhook registration on Netatmo...')
+                    self.webhook_registered = self.myNetatmo.add_webhook(force=True)
+
             self.myNetatmo.testWebhook(body)
             if self.webhookSuccess == 'Unknown':
                 self.webhookTimer = threading.Timer(self.webhookTestTimeoutSeconds, self.webhookTimeout)
@@ -158,7 +168,7 @@ class NetatmoController(udi_interface.Node):
     def _verify_webhook_signature(self, raw_body, headers):
         if not headers or not isinstance(headers, dict):
             return None
-        secret_header = headers.get('x-netatmo-secret') or headers.get('X-Netatmo-secret')
+        secret_header = next((v for k, v in headers.items() if k.lower() == 'x-netatmo-secret'), None)
         client_secret = getattr(self.myNetatmo, 'client_SECRET', None)
         if not client_secret or not secret_header:
             return None
@@ -185,7 +195,7 @@ class NetatmoController(udi_interface.Node):
         headers = data.get('headers', {}) if isinstance(data, dict) else {}
         user_agent = headers.get('user-agent', 'Unknown')
         source_ip = headers.get('x-forwarded-for') or headers.get('x-real-ip') or 'Unknown'
-        secret_header = headers.get('x-netatmo-secret') or headers.get('X-Netatmo-secret')
+        secret_header = next((v for k, v in headers.items() if k.lower() == 'x-netatmo-secret'), None)
 
         logging.info(
             f'[WEBHOOK EVENT] Source: IP={source_ip}, User-Agent="{user_agent}", '
